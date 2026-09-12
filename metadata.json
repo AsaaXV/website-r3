@@ -1,0 +1,6 @@
+{
+  "name": "EcoCampus 3R - Sistem Informasi Bank Sampah & Ekologi Kampus",
+  "description": "Platform edukasi dan literasi pengelolaan sampah 3R kampus dengan panduan visual pemilahan material, kuis interaktif pilah cerdas, mitos vs fakta ekologi, dan timeline masa urai sampah.",
+  "requestFramePermissions": ["camera", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
