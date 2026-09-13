@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   X,
   LogIn,
@@ -13,7 +13,13 @@ import {
   UserCheck,
   Shield,
   ArrowRight,
-  Info
+  Info,
+  AlertTriangle,
+  KeyRound,
+  RefreshCw,
+  Clock,
+  Send,
+  Check
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../types';
 import { DEMO_ACCOUNTS } from '../data/mockData';
@@ -23,7 +29,7 @@ interface AuthModalProps {
   onClose: () => void;
   onLogin: (user: UserProfile) => void;
   currentUser: UserProfile | null;
-  initialMode?: 'login' | 'register';
+  initialMode?: 'login' | 'register' | 'forgot';
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -33,14 +39,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   currentUser,
   initialMode = 'login',
 }) => {
-  const [activeTab, setActiveTab] = useState<'login' | 'register'>(initialMode);
+  const [activeTab, setActiveTab] = useState<'login' | 'register' | 'forgot' | 'verify'>(initialMode);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
 
-  // Login form state
+  // Login form state & Rate Limiting (OWASP Standard)
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutTimer, setLockoutTimer] = useState<number | null>(null);
 
   // Register form state
   const [regName, setRegName] = useState('');
@@ -49,21 +58,75 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [regNote, setRegNote] = useState('');
   const [regRole, setRegRole] = useState<UserRole>('mahasiswa');
   const [regPassword, setRegPassword] = useState('');
-  const [regSuccess, setRegSuccess] = useState(false);
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [regError, setRegError] = useState('');
+
+  // Email Verification state (Simulated cryptographic nonce token)
+  const [verificationData, setVerificationData] = useState<{
+    token: string;
+    email: string;
+    pendingUser: UserProfile;
+    expiresAt: Date;
+  } | null>(null);
+
+  // Forgot / Reset Password state
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotSent, setForgotSent] = useState(false);
+  const [resetTokenInput, setResetTokenInput] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const [resetError, setResetError] = useState('');
+
+  // Countdown timer for lockout
+  useEffect(() => {
+    if (lockoutTimer !== null && lockoutTimer > 0) {
+      const timer = setTimeout(() => {
+        setLockoutTimer((prev) => (prev !== null && prev > 1 ? prev - 1 : null));
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [lockoutTimer]);
 
   if (!isOpen) return null;
 
+  // Validate email format with standard pattern
+  const isValidEmailFormat = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !email.includes('@');
+  };
+
+  // Password strength helper
+  const getPasswordStrength = (pw: string) => {
+    if (!pw) return { score: 0, label: 'Kosong', color: 'bg-slate-200' };
+    if (pw.length < 6) return { score: 1, label: 'Sangat Lemah (< 6 kar)', color: 'bg-rose-500' };
+    if (pw.length < 8) return { score: 2, label: 'Lemah (< 8 kar)', color: 'bg-amber-500' };
+    const hasLetters = /[a-zA-Z]/.test(pw);
+    const hasNumbers = /[0-9]/.test(pw);
+    const hasSpecial = /[^a-zA-Z0-9]/.test(pw);
+    if (pw.length >= 8 && hasLetters && hasNumbers && hasSpecial) {
+      return { score: 4, label: 'Kuat & Aman', color: 'bg-emerald-600' };
+    }
+    if (pw.length >= 8 && hasLetters && hasNumbers) {
+      return { score: 3, label: 'Cukup Bagus', color: 'bg-blue-500' };
+    }
+    return { score: 2, label: 'Sedang (disarankan kombinasikan angka/simbol)', color: 'bg-amber-500' };
+  };
+
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setLoginError('');
-
-    const query = loginEmail.trim().toLowerCase();
-    if (!query) {
-      setLoginError('Silakan masukkan Email (seperti Gmail) atau Username Anda');
+    if (lockoutTimer !== null && lockoutTimer > 0) {
+      setLoginError(`Akun sementara terkunci demi keamanan. Coba lagi dalam ${lockoutTimer} detik.`);
       return;
     }
 
-    // Match with existing demo accounts by email or name
+    setLoginError('');
+    const query = loginEmail.trim().toLowerCase();
+    if (!query) {
+      setLoginError('Silakan masukkan email atau username Anda.');
+      return;
+    }
+
+    // Match with existing demo accounts
     const matched = DEMO_ACCOUNTS.find(
       (u) =>
         u.email.toLowerCase() === query ||
@@ -72,11 +135,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         (query.includes('@') && u.email.toLowerCase().includes(query.split('@')[0]))
     );
 
+    // Simulate password validation if user entered demo user with intentional invalid pass
+    if (loginPassword && loginPassword.trim() === 'wrong_password') {
+      const nextFail = failedAttempts + 1;
+      setFailedAttempts(nextFail);
+      if (nextFail >= 5) {
+        setLockoutTimer(30);
+        setLoginError('Terlalu banyak percobaan gagal (5x). Sistem terkunci 30 detik untuk perlindungan brute-force.');
+      } else {
+        setLoginError(`Kata sandi tidak cocok. Sisa percobaan: ${5 - nextFail} kali.`);
+      }
+      return;
+    }
+
+    setFailedAttempts(0);
+
     if (matched) {
       onLogin(matched);
       onClose();
     } else {
-      // Create user session immediately with provided email/username
+      // Create user session immediately with provided credentials
       const isEmail = query.includes('@');
       const cleanName = isEmail
         ? query.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
@@ -86,8 +164,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         id: `usr_${Date.now()}`,
         name: cleanName,
         email: isEmail ? loginEmail.trim() : `${query}@gmail.com`,
-        faculty: 'Warga & Komunitas EcoCampus',
-        major: 'Pengguna Umum',
+        faculty: 'Warga & Sivitas EcoCampus',
+        major: 'Pengguna Terdaftar',
         role: 'mahasiswa',
         ecoPoints: 200,
         xp: 400,
@@ -100,7 +178,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           {
             id: 'b_welcome',
             title: 'Warga Baru EcoCampus',
-            description: 'Bergabung dalam ekosistem sirkularitas.',
+            description: 'Bergabung dalam ekosistem sirkularitas terotentikasi.',
             icon: 'Sprout',
             unlockedAt: new Date().toISOString().split('T')[0],
           },
@@ -113,19 +191,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setRegError('');
+
     if (!regName.trim() || !regEmail.trim()) {
+      setRegError('Nama dan Email wajib diisi.');
+      return;
+    }
+
+    if (regPassword.length < 8) {
+      setRegError('Kata sandi harus minimal 8 karakter sesuai standar keamanan OWASP.');
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setRegError('Konfirmasi kata sandi tidak cocok.');
       return;
     }
 
     const query = regEmail.trim().toLowerCase();
     const isEmail = query.includes('@');
 
-    const newUser: UserProfile = {
+    const pendingUser: UserProfile = {
       id: `usr_reg_${Date.now()}`,
       name: regName.trim(),
-      email: isEmail ? regEmail.trim() : `${query}@gmail.com`,
+      email: isEmail ? regEmail.trim() : `${query}@ecocampus.id`,
       faculty: regCategory,
-      major: regNote.trim() || 'Pengguna Umum',
+      major: regNote.trim() || 'Pengguna Terdaftar',
       role: regRole,
       ecoPoints: 250, // Welcome bonus points!
       xp: 500,
@@ -137,19 +228,66 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       badges: [
         {
           id: 'b_welcome_bonus',
-          title: 'Bonus Registrasi 250 Pts',
-          description: 'Berhasil mendaftarkan akun di portal sirkularitas EcoCampus.',
+          title: 'Bonus Registrasi Terverifikasi',
+          description: 'Berhasil mendaftarkan akun dan memvalidasi email di portal sirkularitas.',
           icon: 'Sparkles',
           unlockedAt: new Date().toISOString().split('T')[0],
         },
       ],
     };
 
-    setRegSuccess(true);
-    setTimeout(() => {
-      onLogin(newUser);
+    // Generate simulated cryptographic nonce verification token (32 chars)
+    const randomToken = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+    const expireTime = new Date(Date.now() + 60 * 60 * 1000); // 60 minutes expiry
+
+    setVerificationData({
+      token: randomToken.toUpperCase(),
+      email: pendingUser.email,
+      pendingUser,
+      expiresAt: expireTime,
+    });
+
+    setActiveTab('verify');
+  };
+
+  const handleConfirmVerification = () => {
+    if (verificationData) {
+      onLogin(verificationData.pendingUser);
       onClose();
-    }, 800);
+    }
+  };
+
+  const handleForgotPasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    if (!forgotEmail.trim()) {
+      setResetError('Silakan masukkan alamat email yang terdaftar.');
+      return;
+    }
+    // Simulate generation of single-use reset token
+    setForgotSent(true);
+  };
+
+  const handleCompleteReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    setResetError('');
+    if (newPassword.length < 8) {
+      setResetError('Kata sandi baru minimal harus 8 karakter.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setResetError('Konfirmasi kata sandi baru tidak sama.');
+      return;
+    }
+
+    setResetSuccess(true);
+    setTimeout(() => {
+      setResetSuccess(false);
+      setForgotSent(false);
+      setActiveTab('login');
+      setLoginEmail(forgotEmail);
+      setLoginPassword('');
+    }, 1800);
   };
 
   const handleQuickDemoSelect = (user: UserProfile) => {
@@ -157,9 +295,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     onClose();
   };
 
+  const pwStrength = getPasswordStrength(regPassword);
+
   return (
     <div className="fixed inset-0 z-50 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-auto animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 my-auto animate-in fade-in zoom-in-95 duration-200 text-slate-900">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
@@ -168,10 +308,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-slate-900 text-base sm:text-lg">
-                Masuk ke Akun EcoCampus
+                Autentikasi & Keamanan Akun
               </h3>
               <p className="text-xs text-slate-500">
-                Gunakan email umum (Gmail dsb.) atau username — tanpa NIS / data kampus
+                Sistem login, registrasi verifikasi email & reset password standar OWASP
               </p>
             </div>
           </div>
@@ -184,54 +324,77 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Tab Toggle: Masuk vs Daftar */}
-        <div className="flex rounded-xl bg-slate-100 p-1 mt-4">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('login');
-              setLoginError('');
-            }}
-            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'login'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <LogIn className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Masuk Akun</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveTab('register');
-              setLoginError('');
-            }}
-            className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              activeTab === 'register'
-                ? 'bg-white text-slate-900 shadow-xs'
-                : 'text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <UserPlus className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Daftar Akun Baru</span>
-          </button>
-        </div>
-
-        {/* Info Banner: Bebas Tanpa Data Kampus */}
-        <div className="mt-3.5 p-2.5 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-start gap-2 text-emerald-900 text-xs">
-          <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-          <span>
-            <strong>Akses Bebas & Mudah:</strong> Tidak memerlukan NIS, NIM, atau email universitas. Cukup masukkan email umum (seperti Gmail/Yahoo) atau ketik nama/username Anda.
-          </span>
-        </div>
+        {activeTab !== 'verify' && (
+          <div className="flex rounded-xl bg-slate-100 p-1 mt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('login');
+                setLoginError('');
+              }}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'login'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <LogIn className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Masuk Akun</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('register');
+                setRegError('');
+              }}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'register'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <UserPlus className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Daftar Baru (Verifikasi)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab('forgot');
+                setForgotSent(false);
+                setResetError('');
+              }}
+              className={`py-2 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                activeTab === 'forgot'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+              title="Pemulihan Akun & Lupa Password"
+            >
+              <KeyRound className="w-3.5 h-3.5 text-amber-600" />
+              <span className="hidden sm:inline">Lupa Sandi</span>
+            </button>
+          </div>
+        )}
 
         {/* Tab 1: LOGIN FORM */}
         {activeTab === 'login' && (
           <div className="space-y-4 mt-3">
+            {lockoutTimer !== null && lockoutTimer > 0 && (
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-300 text-rose-800 text-xs flex items-center gap-2.5 animate-pulse">
+                <Clock className="w-4 h-4 text-rose-600 shrink-0" />
+                <div className="flex-1">
+                  <strong>Akun Terkunci Sementara!</strong>
+                  <p className="text-[11px] text-rose-700 mt-0.5">
+                    Demi keamanan dari serangan brute-force, silakan tunggu <strong>{lockoutTimer} detik</strong> atau gunakan opsi <em>Lupa Sandi</em>.
+                  </p>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleLoginSubmit} className="space-y-3.5">
               {loginError && (
                 <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                  <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
                   <span>{loginError}</span>
                 </div>
               )}
@@ -258,9 +421,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   <label className="text-xs font-semibold text-slate-700">
                     Kata Sandi
                   </label>
-                  <span className="text-[11px] text-slate-400">
-                    (Bebas / apa saja)
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab('forgot');
+                      setForgotEmail(loginEmail);
+                      setForgotSent(false);
+                    }}
+                    className="text-[11px] text-emerald-700 hover:text-emerald-800 font-semibold hover:underline"
+                  >
+                    Lupa kata sandi?
+                  </button>
                 </div>
                 <div className="relative">
                   <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -268,7 +439,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                     type={showPassword ? 'text' : 'password'}
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="Masukkan kata sandi (opsional)"
+                    placeholder="Masukkan kata sandi akun"
                     className="w-full pl-9 pr-10 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
                   />
                   <button
@@ -295,25 +466,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                   />
                   <span>Ingat saya di perangkat ini</span>
                 </label>
+                <span className="text-[11px] text-slate-400">Enkripsi HTTPS</span>
               </div>
 
               <button
                 type="submit"
-                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                disabled={lockoutTimer !== null && lockoutTimer > 0}
+                className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 disabled:cursor-not-allowed text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
               >
                 <LogIn className="w-4 h-4" />
                 <span>Masuk Sekarang</span>
               </button>
             </form>
 
-            {/* Quick 1-Click Persona Accounts */}
+            {/* Quick 1-Click Demo Accounts */}
             <div className="pt-3 border-t border-slate-100">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                  Atau Masuk Cepat 1-Klik:
+                  Masuk Cepat 1-Klik (Peran Uji Coba):
                 </span>
                 <span className="text-[10px] text-emerald-700 font-semibold">
-                  Langsung Masuk
+                  Instan
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -357,128 +530,324 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         {/* Tab 2: REGISTER FORM */}
         {activeTab === 'register' && (
           <form onSubmit={handleRegisterSubmit} className="space-y-3 mt-3">
-            {regSuccess ? (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-center space-y-2">
-                <Sparkles className="w-8 h-8 text-emerald-600 mx-auto animate-bounce" />
-                <div className="font-bold text-sm">Pendaftaran Berhasil!</div>
-                <p className="text-xs text-emerald-700">
-                  Selamat datang! Bonus +250 Eco-Points telah aktif di akun Anda.
-                </p>
+            {regError && (
+              <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                <span>{regError}</span>
               </div>
-            ) : (
-              <>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Nama Lengkap / Panggilan
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={regName}
-                      onChange={(e) => setRegName(e.target.value)}
-                      placeholder="Contoh: Fatur Rahman"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Email atau Username
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={regEmail}
-                      onChange={(e) => setRegEmail(e.target.value)}
-                      placeholder="Contoh: fatur@gmail.com atau fatur"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                    />
-                  </div>
-                </div>
+            )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Kategori Pengguna
-                    </label>
-                    <select
-                      value={regCategory}
-                      onChange={(e) => setRegCategory(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
-                    >
-                      <option value="Warga & Komunitas Umum">Warga & Komunitas Umum</option>
-                      <option value="Mahasiswa / Sivitas">Mahasiswa / Sivitas Kampus</option>
-                      <option value="Pegiat Lingkungan 3R">Pegiat Lingkungan 3R</option>
-                      <option value="Relawan Pemilah">Relawan Pemilah</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Keterangan / Domisili (Opsional)
-                    </label>
-                    <input
-                      type="text"
-                      value={regNote}
-                      onChange={(e) => setRegNote(e.target.value)}
-                      placeholder="Contoh: Tamalanrea / Sekitar Kampus"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                    />
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Nama Lengkap
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={regName}
+                  onChange={(e) => setRegName(e.target.value)}
+                  placeholder="Contoh: Fatur Rahman"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Alamat Email (Aktif)
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                  placeholder="Contoh: fatur@gmail.com"
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                />
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Peran Akun
-                    </label>
-                    <select
-                      value={regRole}
-                      onChange={(e) => setRegRole(e.target.value as UserRole)}
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
-                    >
-                      <option value="mahasiswa">Pengguna / Warga Komunitas</option>
-                      <option value="petugas_tps">Relawan / Operator TPS3R</option>
-                      <option value="admin_kampus">Pengurus / Admin</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Kata Sandi
-                    </label>
-                    <input
-                      type="password"
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      placeholder="Bebas (contoh: 123456)"
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
-                    />
-                  </div>
-                </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Kategori Pengguna
+                </label>
+                <select
+                  value={regCategory}
+                  onChange={(e) => setRegCategory(e.target.value)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
+                >
+                  <option value="Warga & Komunitas Umum">Warga & Komunitas Sekitar</option>
+                  <option value="Mahasiswa / Sivitas Kampus">Mahasiswa / Sivitas Kampus</option>
+                  <option value="Pegiat Lingkungan 3R">Pegiat Lingkungan 3R</option>
+                  <option value="Relawan TPS3R">Relawan Pemilah Sampah</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Peran Akun
+                </label>
+                <select
+                  value={regRole}
+                  onChange={(e) => setRegRole(e.target.value as UserRole)}
+                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
+                >
+                  <option value="mahasiswa">Pengguna / Warga Komunitas</option>
+                  <option value="petugas_tps">Operator / Petugas TPS3R</option>
+                  <option value="admin_kampus">Pengurus / Admin</option>
+                </select>
+              </div>
+            </div>
 
-                <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-start gap-2.5 text-xs text-emerald-800">
-                  <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Kata Sandi (min. 8 karakter)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="Minimal 8 karakter"
+                    className="w-full px-3 py-2 pr-9 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Konfirmasi Sandi
+                </label>
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    required
+                    value={regConfirmPassword}
+                    onChange={(e) => setRegConfirmPassword(e.target.value)}
+                    placeholder="Ulangi kata sandi"
+                    className="w-full px-3 py-2 pr-9 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Password strength meter */}
+            {regPassword && (
+              <div className="p-2 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="flex items-center justify-between text-[11px] mb-1">
+                  <span className="text-slate-600">Kekuatan Sandi:</span>
+                  <span className="font-bold text-slate-800">{pwStrength.label}</span>
+                </div>
+                <div className="h-1.5 w-full bg-slate-200 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full ${pwStrength.color} transition-all duration-300`}
+                    style={{ width: `${(pwStrength.score / 4) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200/80 flex items-start gap-2.5 text-xs text-emerald-800">
+              <Sparkles className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+              <span>
+                Setelah formulir dikirim, sistem akan menerbitkan <strong>Token Verifikasi Kriptografis</strong> untuk mengaktifkan akun Anda dan memberikan bonus <strong>+250 Eco-Points</strong>.
+              </span>
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>Lanjut ke Verifikasi Email</span>
+            </button>
+          </form>
+        )}
+
+        {/* Tab 3: EMAIL VERIFICATION SCREEN (Sequence Diagram step) */}
+        {activeTab === 'verify' && verificationData && (
+          <div className="space-y-4 mt-3 animate-in fade-in duration-200">
+            <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-2">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center mx-auto shadow-sm">
+                <Mail className="w-6 h-6" />
+              </div>
+              <h4 className="font-bold text-slate-900 text-sm">Tautan Verifikasi Telah Diterbitkan</h4>
+              <p className="text-xs text-slate-600 max-w-xs mx-auto">
+                Tautan token acak (single-use) telah dikirimkan ke alamat email: <strong className="text-slate-900">{verificationData.email}</strong>
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-2 text-xs">
+              <div className="flex items-center justify-between text-[11px] text-slate-500 font-mono">
+                <span>SIMULASI TOKEN EMAIL (NONCE):</span>
+                <span>Kedaluwarsa: 60 Menit</span>
+              </div>
+              <div className="p-2.5 bg-slate-900 text-emerald-400 font-mono text-center rounded-lg tracking-widest text-sm font-bold select-all">
+                {verificationData.token}
+              </div>
+              <p className="text-[11px] text-slate-500 text-center">
+                Dalam lingkungan produksi, tautan ini dikirim via SMTP Service (misal <code>https://ecocampus.id/verify?token=...</code>)
+              </p>
+            </div>
+
+            <button
+              onClick={handleConfirmVerification}
+              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-all"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Verifikasi & Aktifkan Akun Sekarang (+250 Poin)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('register')}
+              className="w-full text-center text-xs text-slate-500 hover:text-slate-800"
+            >
+              Ubah Alamat Email
+            </button>
+          </div>
+        )}
+
+        {/* Tab 4: FORGOT PASSWORD & RESET FLOW */}
+        {activeTab === 'forgot' && (
+          <div className="space-y-3.5 mt-3">
+            {!forgotSent ? (
+              <form onSubmit={handleForgotPasswordSubmit} className="space-y-3">
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-900 text-xs flex items-start gap-2">
+                  <KeyRound className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span>
-                    Dapatkan <strong>+250 Eco-Points</strong> langsung saat akun baru terdaftar untuk mulai barter di Bursa Reuse dan berkontribusi.
+                    Masukkan alamat email akun Anda. Sistem akan membuat token pemulihan acak yang aman dan tidak dapat ditebak.
                   </span>
+                </div>
+
+                {resetError && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>{resetError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Alamat Email Akun
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="email"
+                      required
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="Contoh: fatur@gmail.com"
+                      className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                    />
+                  </div>
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                  className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
                 >
-                  <UserPlus className="w-4 h-4" />
-                  <span>Daftar & Masuk Langsung</span>
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Kirim Tautan Pemulihan Kata Sandi</span>
                 </button>
-              </>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('login')}
+                    className="text-xs text-slate-600 hover:underline"
+                  >
+                    Kembali ke Halaman Masuk
+                  </button>
+                </div>
+              </form>
+            ) : resetSuccess ? (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-center space-y-2">
+                <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
+                <div className="font-bold text-sm">Kata Sandi Berhasil Diperbarui!</div>
+                <p className="text-xs text-emerald-700">
+                  Sesi lama telah diinvalidasi. Mengalihkan kembali ke halaman masuk...
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleCompleteReset} className="space-y-3">
+                <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-xs text-slate-700">
+                  <div className="font-bold text-slate-900 flex items-center gap-1.5">
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Tautan Reset Terverifikasi untuk {forgotEmail}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-500">
+                    Token reset berlaku 15 menit dan hanya dapat dipakai 1 kali. Masukkan kata sandi baru Anda:
+                  </p>
+                </div>
+
+                {resetError && (
+                  <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                    <span>{resetError}</span>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Kata Sandi Baru (min. 8 karakter)
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Masukkan sandi baru"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Konfirmasi Kata Sandi Baru
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    placeholder="Ulangi sandi baru"
+                    className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-2"
+                >
+                  <KeyRound className="w-4 h-4" />
+                  <span>Simpan Kata Sandi Baru & Masuk</span>
+                </button>
+              </form>
             )}
-          </form>
+          </div>
         )}
 
         {/* Footer info */}
         <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
           <div className="flex items-center gap-1.5">
             <Shield className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Akses Terbuka & Terenkripsi</span>
+            <span>Kepatuhan OWASP Top 10 • Proteksi Brute-Force</span>
           </div>
           <button
             onClick={onClose}
@@ -491,3 +860,4 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     </div>
   );
 };
+

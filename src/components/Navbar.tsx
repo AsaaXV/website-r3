@@ -20,6 +20,7 @@ import {
   UserPlus,
   RefreshCw,
   Sparkles,
+  Layers,
 } from 'lucide-react';
 import { UserProfile } from '../types';
 
@@ -34,6 +35,8 @@ interface NavbarProps {
   onLogout: () => void;
   onOpenInbox: () => void;
   onOpenMyProfile: () => void;
+  onOpenOnboarding: () => void;
+  onOpenArchitecture: () => void;
   unreadMessagesCount: number;
 }
 
@@ -48,6 +51,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   onOpenInbox,
   onOpenMyProfile,
+  onOpenOnboarding,
+  onOpenArchitecture,
   unreadMessagesCount,
 }) => {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -155,6 +160,17 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
 
+            {/* Tour & Onboarding Button */}
+            <button
+              onClick={onOpenOnboarding}
+              id="navbar-onboarding-btn"
+              title="Panduan Cepat & Tur Fitur EcoCampus"
+              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              <span className="hidden sm:inline">Panduan</span>
+            </button>
+
             {/* Inter-User Message Inbox Button */}
             <button
               onClick={onOpenInbox}
@@ -255,6 +271,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                       >
                         <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
                         <span>Ganti Akun Demo (Role)</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsDropdownOpen(false);
+                          onOpenArchitecture();
+                        }}
+                        className="w-full px-3.5 py-2 text-left text-xs text-slate-700 hover:bg-slate-50 flex items-center gap-2 font-medium"
+                      >
+                        <Layers className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Dokumen Arsitektur & ERD</span>
                       </button>
                     </div>
 

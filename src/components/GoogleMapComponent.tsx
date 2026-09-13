@@ -9,7 +9,7 @@ import {
 } from '@vis.gl/react-google-maps';
 import { GISFacility, VRPStop } from '../types';
 import { WASTE_CATEGORIES } from '../data/mockData';
-import { MapPin, Navigation, ExternalLink, Clock, Sparkles } from 'lucide-react';
+import { MapPin, Navigation, ExternalLink, Clock, Sparkles, Key, AlertTriangle } from 'lucide-react';
 
 interface GoogleMapComponentProps {
   apiKey: string;
@@ -92,10 +92,75 @@ export const GoogleMapComponent: React.FC<GoogleMapComponentProps> = ({
   simulatedStep,
 }) => {
   const [activeInfoWindow, setActiveInfoWindow] = useState<GISFacility | null>(selectedFacility);
+  const [mapAuthError, setMapAuthError] = useState<boolean>(false);
+
+  useEffect(() => {
+    (window as any).gm_authFailure = () => {
+      console.warn('Google Maps authentication failed (gm_authFailure)');
+      setMapAuthError(true);
+    };
+  }, []);
 
   useEffect(() => {
     setActiveInfoWindow(selectedFacility);
   }, [selectedFacility]);
+
+  const isValidKey = Boolean(apiKey && apiKey.trim().length > 5);
+
+  if (!isValidKey) {
+    return (
+      <div className="w-full h-full min-h-[460px] sm:min-h-[520px] flex flex-col items-center justify-center p-6 bg-slate-900 text-white text-center rounded-2xl border border-slate-800 space-y-4">
+        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+          <Key className="w-6 h-6" />
+        </div>
+        <div className="max-w-md space-y-2">
+          <h3 className="font-bold text-sm sm:text-base text-slate-100">
+            Google Maps Platform API Key Diperlukan
+          </h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Untuk merender peta satelit Google Maps secara langsung, masukkan Google Cloud API Key atau gunakan <strong>Maps Demo Key</strong> gratis tanpa kartu kredit.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+          <a
+            href="https://mapsplatform.google.com/maps-demo-key?utm_campaign=gmp_mcp_codeassist_v1_aistudio"
+            target="_blank"
+            rel="noreferrer"
+            className="px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+          >
+            <span>Ambil Maps Demo Key</span>
+            <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        </div>
+      </div>
+    );
+  }
+
+  if (mapAuthError) {
+    return (
+      <div className="w-full h-full min-h-[460px] sm:min-h-[520px] flex flex-col items-center justify-center p-6 bg-slate-900 text-white text-center rounded-2xl border border-rose-800/40 space-y-3">
+        <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+          <AlertTriangle className="w-6 h-6" />
+        </div>
+        <div className="max-w-md space-y-1.5">
+          <h3 className="font-bold text-sm sm:text-base text-rose-200">
+            Google Maps API Key Memerlukan Verifikasi
+          </h3>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Kunci API yang dimasukkan belum mengaktifkan <em>Maps JavaScript API</em> atau terdapat pembatasan domain di Google Cloud Console. Silakan periksa kunci Anda atau gunakan mode Peta Topologi Kampus.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 pt-2">
+          <button
+            onClick={() => setMapAuthError(false)}
+            className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors cursor-pointer"
+          >
+            Coba Muat Ulang
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // Default coordinate: Kampus Universitas Hasanuddin Tamalanrea, Makassar
   const defaultCenter = { lat: -5.1328, lng: 119.4932 };

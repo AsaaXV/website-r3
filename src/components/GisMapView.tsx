@@ -29,7 +29,15 @@ export const GisMapView: React.FC = () => {
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [filterRadiusKm, setFilterRadiusKm] = useState<number>(5.0);
   const [activeTab, setActiveTab] = useState<'facilities' | 'vrp'>('facilities');
-  const [mapEngine, setMapEngine] = useState<'google' | 'vector'>('google');
+  // Google Maps API Key handling
+  const envKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
+  const [customApiKey, setCustomApiKey] = useState<string>(() => {
+    return localStorage.getItem('ecocampus_gmaps_key') || envKey || '';
+  });
+  const [mapEngine, setMapEngine] = useState<'google' | 'vector'>(() => {
+    const saved = localStorage.getItem('ecocampus_gmaps_key') || envKey || '';
+    return saved.trim().length > 5 ? 'google' : 'vector';
+  });
   const [isVrpSimulating, setIsVrpSimulating] = useState<boolean>(false);
   const [simulatedStep, setSimulatedStep] = useState<number>(2);
 
@@ -38,11 +46,6 @@ export const GisMapView: React.FC = () => {
   const [gpsStatus, setGpsStatus] = useState<'idle' | 'loading' | 'active' | 'error'>('idle');
   const [gpsMessage, setGpsMessage] = useState<string>('');
 
-  // Google Maps API Key handling
-  const envKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY || '';
-  const [customApiKey, setCustomApiKey] = useState<string>(() => {
-    return localStorage.getItem('ecocampus_gmaps_key') || envKey || '';
-  });
   const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
   const [tempKeyInput, setTempKeyInput] = useState<string>(customApiKey);
 
@@ -118,8 +121,15 @@ export const GisMapView: React.FC = () => {
   };
 
   const handleSaveApiKey = () => {
-    setCustomApiKey(tempKeyInput.trim());
-    localStorage.setItem('ecocampus_gmaps_key', tempKeyInput.trim());
+    const trimmed = tempKeyInput.trim();
+    setCustomApiKey(trimmed);
+    if (trimmed.length > 5) {
+      localStorage.setItem('ecocampus_gmaps_key', trimmed);
+      setMapEngine('google');
+    } else {
+      localStorage.removeItem('ecocampus_gmaps_key');
+      setMapEngine('vector');
+    }
     setShowKeyModal(false);
   };
 
@@ -197,7 +207,12 @@ export const GisMapView: React.FC = () => {
           </span>
           <div className="flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-xs">
             <button
-              onClick={() => setMapEngine('google')}
+              onClick={() => {
+                setMapEngine('google');
+                if (!customApiKey || customApiKey.trim().length <= 5) {
+                  setShowKeyModal(true);
+                }
+              }}
               className={`px-2.5 py-1 rounded-md font-bold transition-all flex items-center gap-1.5 ${
                 mapEngine === 'google'
                   ? 'bg-emerald-600 text-white shadow-2xs'

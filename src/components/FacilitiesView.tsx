@@ -131,12 +131,24 @@ const MapPanController: React.FC<{
 };
 
 export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModal }) => {
-  // Read env key or use state to allow pasting Demo Key or Custom Key
+  // Read env key or localStorage to allow pasting Demo Key or Custom Key
   const envMapsKey = (import.meta as any).env?.VITE_GOOGLE_MAPS_API_KEY;
   const initialKey = (typeof envMapsKey === 'string' ? envMapsKey : '') || '';
-  const [apiKey, setApiKey] = useState<string>(initialKey);
-  const [showKeyPrompt, setShowKeyPrompt] = useState<boolean>(!initialKey);
-  const [tempKeyInput, setTempKeyInput] = useState<string>('');
+  const [apiKey, setApiKey] = useState<string>(() => {
+    return localStorage.getItem('ecocampus_gmaps_key') || initialKey || '';
+  });
+  const [showKeyPrompt, setShowKeyPrompt] = useState<boolean>(false);
+  const [tempKeyInput, setTempKeyInput] = useState<string>(() => {
+    return localStorage.getItem('ecocampus_gmaps_key') || initialKey || '';
+  });
+  const [mapAuthError, setMapAuthError] = useState<boolean>(false);
+
+  useEffect(() => {
+    (window as any).gm_authFailure = () => {
+      console.warn('Google Maps authentication failed in FacilitiesView');
+      setMapAuthError(true);
+    };
+  }, []);
 
   // Default facility is TPA Tamangapa (Tempat Sampah Akhir Utama)
   const defaultFacility = GIS_FACILITIES[0]; // tpa_tamangapa
@@ -399,12 +411,23 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
 
         {/* API Key configuration toggle */}
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-slate-500 font-medium">Google Maps API:</span>
-          {apiKey ? (
-            <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>Key Aktif</span>
-            </span>
+          <span className="text-slate-500 font-medium">Google Maps Satelit:</span>
+          {apiKey && !mapAuthError ? (
+            <div className="flex items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 font-bold text-[10px] flex items-center gap-1">
+                <CheckCircle2 className="w-3 h-3" />
+                <span>Key Aktif</span>
+              </span>
+              <button
+                onClick={() => {
+                  setTempKeyInput(apiKey);
+                  setShowKeyPrompt(true);
+                }}
+                className="text-[10px] text-slate-500 hover:text-slate-800 underline cursor-pointer"
+              >
+                Ubah
+              </button>
+            </div>
           ) : (
             <button
               onClick={() => setShowKeyPrompt(true)}
@@ -423,7 +446,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Key className="w-4 h-4 text-emerald-400" />
-              <h4 className="font-bold text-xs sm:text-sm">Konfigurasi Google Maps API Key</h4>
+              <h4 className="font-bold text-xs sm:text-sm">Konfigurasi Google Maps Platform API Key</h4>
             </div>
             <button
               onClick={() => setShowKeyPrompt(false)}
@@ -433,7 +456,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
             </button>
           </div>
           <p className="text-xs text-slate-300 leading-relaxed max-w-3xl">
-            Untuk merender peta satelit Google Maps Platform secara penuh tanpa batas, Anda dapat memasukkan Google Cloud API Key atau menggunakan <strong>Maps Demo Key</strong> gratis tanpa tagihan kartu kredit (
+            Untuk mengaktifkan peta satelit Google Maps Platform secara live, Anda dapat memasukkan Google Cloud API Key atau menggunakan <strong>Maps Demo Key</strong> gratis tanpa kartu kredit (
             <a
               href="https://mapsplatform.google.com/maps-demo-key?utm_campaign=gmp_mcp_codeassist_v1_aistudio"
               target="_blank"
@@ -442,27 +465,45 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
             >
               Ambil Demo Key <ExternalLink className="w-3 h-3" />
             </a>
-            ).
+            ). Jika tanpa API key, peta secara otomatis menggunakan <strong>Mode Topologi Koridor Kampus</strong> interaktif dengan koordinat akurat.
           </p>
-          <div className="flex gap-2 max-w-lg">
+          <div className="flex flex-wrap items-center gap-2 max-w-xl">
             <input
               type="text"
               placeholder="Tempel Google Maps API Key / Demo Key di sini..."
               value={tempKeyInput}
               onChange={(e) => setTempKeyInput(e.target.value)}
-              className="flex-1 px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white focus:outline-emerald-400"
+              className="flex-1 min-w-[240px] px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white focus:outline-emerald-400"
             />
             <button
               onClick={() => {
-                if (tempKeyInput.trim()) {
-                  setApiKey(tempKeyInput.trim());
-                  setShowKeyPrompt(false);
+                const trimmed = tempKeyInput.trim();
+                setApiKey(trimmed);
+                if (trimmed.length > 5) {
+                  localStorage.setItem('ecocampus_gmaps_key', trimmed);
+                  setMapAuthError(false);
+                } else {
+                  localStorage.removeItem('ecocampus_gmaps_key');
                 }
+                setShowKeyPrompt(false);
               }}
               className="px-4 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
             >
               Terapkan
             </button>
+            {apiKey && (
+              <button
+                onClick={() => {
+                  setApiKey('');
+                  setTempKeyInput('');
+                  localStorage.removeItem('ecocampus_gmaps_key');
+                  setShowKeyPrompt(false);
+                }}
+                className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-rose-300 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Hapus Key
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -583,206 +624,442 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
               </div>
 
               {/* Map Area */}
-              <div className="relative w-full h-[520px] bg-slate-950">
-                <APIProvider apiKey={apiKey} libraries={['marker', 'routes']}>
-                  <Map
-                    mapId="DEMO_MAP_ID"
-                    defaultCenter={fullCorridorCenter}
-                    defaultZoom={13}
-                    gestureHandling="greedy"
-                    mapTypeId={mapType}
-                    disableDefaultUI={false}
-                    internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
-                    style={{ width: '100%', height: '100%' }}
-                  >
-                    <MapPanController targetCoords={targetCoords} targetZoom={targetZoom} />
+              <div className="relative w-full h-[540px] bg-slate-950 overflow-hidden select-none">
+                {apiKey && apiKey.trim().length > 5 && !mapAuthError ? (
+                  <APIProvider apiKey={apiKey} libraries={['marker', 'routes']}>
+                    <Map
+                      mapId="DEMO_MAP_ID"
+                      defaultCenter={fullCorridorCenter}
+                      defaultZoom={13}
+                      gestureHandling="greedy"
+                      mapTypeId={mapType}
+                      disableDefaultUI={false}
+                      internalUsageAttributionIds={['gmp_mcp_codeassist_v1_aistudio']}
+                      style={{ width: '100%', height: '100%' }}
+                    >
+                      <MapPanController targetCoords={targetCoords} targetZoom={targetZoom} />
 
-                    {/* User Geolocation Marker with pulsating blue ring */}
-                    {userLocation && (
-                      <AdvancedMarker
-                        position={userLocation}
-                        title="Posisi Mahasiswa (Titik Timbulan Sampah)"
-                        onClick={() => setShowUserMarkerInfo(true)}
-                      >
-                        <div className="relative flex items-center justify-center cursor-pointer">
-                          <span className="w-6 h-6 rounded-full bg-blue-500/40 ring-4 ring-blue-400/50 animate-ping absolute"></span>
-                          <span className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white relative z-10 shadow-lg flex items-center justify-center">
-                            <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
-                          </span>
-                        </div>
-                      </AdvancedMarker>
-                    )}
-
-                    {/* User Location Info Window */}
-                    {showUserMarkerInfo && userLocation && (
-                      <InfoWindow
-                        position={userLocation}
-                        onCloseClick={() => setShowUserMarkerInfo(false)}
-                      >
-                        <div className="p-1 max-w-xs text-xs space-y-1.5 text-slate-900">
-                          <div className="flex items-center gap-1.5">
-                            <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-800">
-                              Posisi Mahasiswa (Hulu)
+                      {/* User Geolocation Marker with pulsating blue ring */}
+                      {userLocation && (
+                        <AdvancedMarker
+                          position={userLocation}
+                          title="Posisi Mahasiswa (Titik Timbulan Sampah)"
+                          onClick={() => setShowUserMarkerInfo(true)}
+                        >
+                          <div className="relative flex items-center justify-center cursor-pointer">
+                            <span className="w-6 h-6 rounded-full bg-blue-500/40 ring-4 ring-blue-400/50 animate-ping absolute"></span>
+                            <span className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white relative z-10 shadow-lg flex items-center justify-center">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white"></span>
                             </span>
                           </div>
-                          <h4 className="font-bold text-slate-900 text-xs">
-                            {userLocationName}
-                          </h4>
-                          <p className="text-[11px] text-slate-600">
-                            Jarak tempuh ke <strong>TPA Tamangapa Antang</strong>: ±{primaryTpa.liveDistanceKm} km
-                          </p>
-                          <div className="p-1.5 bg-rose-50 rounded border border-rose-200 text-[10px] text-rose-800">
-                            Jika sampah Anda tidak dipilah di sini, armada dinas kebersihan akan mengangkutnya ke TPA Tamangapa.
+                        </AdvancedMarker>
+                      )}
+
+                      {/* User Location Info Window */}
+                      {showUserMarkerInfo && userLocation && (
+                        <InfoWindow
+                          position={userLocation}
+                          onCloseClick={() => setShowUserMarkerInfo(false)}
+                        >
+                          <div className="p-1 max-w-xs text-xs space-y-1.5 text-slate-900">
+                            <div className="flex items-center gap-1.5">
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-blue-100 text-blue-800">
+                                Posisi Mahasiswa (Hulu)
+                              </span>
+                            </div>
+                            <h4 className="font-bold text-slate-900 text-xs">
+                              {userLocationName}
+                            </h4>
+                            <p className="text-[11px] text-slate-600">
+                              Jarak tempuh ke <strong>TPA Tamangapa Antang</strong>: ±{primaryTpa.liveDistanceKm} km
+                            </p>
+                            <div className="p-1.5 bg-rose-50 rounded border border-rose-200 text-[10px] text-rose-800">
+                              Jika sampah Anda tidak dipilah di sini, armada dinas kebersihan akan mengangkutnya ke TPA Tamangapa.
+                            </div>
+                            <button
+                              onClick={() => {
+                                setShowUserMarkerInfo(false);
+                                handleFocusTPA();
+                              }}
+                              className="w-full py-1 text-center rounded bg-rose-600 text-white font-bold text-[10px] hover:bg-rose-700 cursor-pointer"
+                            >
+                              Sorot TPA Tamangapa di Peta
+                            </button>
                           </div>
-                          <button
-                            onClick={() => {
-                              setShowUserMarkerInfo(false);
-                              handleFocusTPA();
-                            }}
-                            className="w-full py-1 text-center rounded bg-rose-600 text-white font-bold text-[10px] hover:bg-rose-700 cursor-pointer"
-                          >
-                            Sorot TPA Tamangapa di Peta
-                          </button>
-                        </div>
-                      </InfoWindow>
-                    )}
+                        </InfoWindow>
+                      )}
 
-                    {/* Facilities Advanced Markers with Distinct Styling for TPA Akhir */}
-                    {filteredFacilities.map((fac) => {
-                      const isSelected = selectedFacility.id === fac.id;
-                      const isLandfill = fac.isFinalLandfill;
+                      {/* Facilities Advanced Markers with Distinct Styling for TPA Akhir */}
+                      {filteredFacilities.map((fac) => {
+                        const isSelected = selectedFacility.id === fac.id;
+                        const isLandfill = fac.isFinalLandfill;
 
-                      if (isLandfill) {
+                        if (isLandfill) {
+                          return (
+                            <AdvancedMarker
+                              key={fac.id}
+                              position={{ lat: fac.latitude, lng: fac.longitude }}
+                              onClick={() => handleSelectFacility(fac)}
+                              title={`${fac.name} (TEMPAT LIMBAH SAMPAH AKHIR)`}
+                            >
+                              <div className="relative flex flex-col items-center cursor-pointer group">
+                                {/* Pulsing beacon for TPA Sampah Akhir Utama */}
+                                {fac.type === 'TPA Sampah Akhir' && (
+                                  <span className="w-9 h-9 rounded-full bg-rose-600/40 ring-4 ring-rose-500/50 animate-ping absolute -top-1"></span>
+                                )}
+                                <div
+                                  className={`px-2.5 py-1 rounded-xl text-white font-black text-[10px] flex items-center gap-1 shadow-xl border-2 transition-transform ${
+                                    fac.type === 'TPA Sampah Akhir'
+                                      ? 'bg-rose-700 border-white ring-2 ring-rose-600'
+                                      : fac.type === 'TPST Pengolahan Akhir'
+                                      ? 'bg-purple-700 border-white ring-2 ring-purple-600'
+                                      : 'bg-amber-700 border-white ring-2 ring-amber-600'
+                                  } ${isSelected ? 'scale-125' : 'scale-100 group-hover:scale-110'}`}
+                                >
+                                  <Mountain className="w-3.5 h-3.5 text-amber-300" />
+                                  <span>
+                                    {fac.type === 'TPA Sampah Akhir'
+                                      ? 'TPA AKHIR'
+                                      : fac.type === 'TPST Pengolahan Akhir'
+                                      ? 'TPST RDF'
+                                      : 'TPA B3'}
+                                  </span>
+                                </div>
+                                <div
+                                  className={`w-2.5 h-2.5 rotate-45 -mt-1 border-r-2 border-b-2 border-white ${
+                                    fac.type === 'TPA Sampah Akhir'
+                                      ? 'bg-rose-700'
+                                      : fac.type === 'TPST Pengolahan Akhir'
+                                      ? 'bg-purple-700'
+                                      : 'bg-amber-700'
+                                  }`}
+                                ></div>
+                              </div>
+                            </AdvancedMarker>
+                          );
+                        }
+
+                        // Standard reduction facilities (TPS3R, Drop Box, Bank Sampah)
+                        const pinBg =
+                          fac.type === 'TPS3R'
+                            ? '#059669' // Emerald
+                            : fac.type === 'Drop Box Kampus'
+                            ? '#2563eb' // Blue
+                            : '#d97706'; // Amber
+
                         return (
                           <AdvancedMarker
                             key={fac.id}
                             position={{ lat: fac.latitude, lng: fac.longitude }}
                             onClick={() => handleSelectFacility(fac)}
-                            title={`${fac.name} (TEMPAT LIMBAH SAMPAH AKHIR)`}
+                            title={`${fac.name} (Titik Pilah Reduksi Hulu)`}
                           >
-                            <div className="relative flex flex-col items-center cursor-pointer group">
-                              {/* Pulsing beacon for TPA Sampah Akhir Utama */}
-                              {fac.type === 'TPA Sampah Akhir' && (
-                                <span className="w-9 h-9 rounded-full bg-rose-600/40 ring-4 ring-rose-500/50 animate-ping absolute -top-1"></span>
-                              )}
-                              <div
-                                className={`px-2.5 py-1 rounded-xl text-white font-black text-[10px] flex items-center gap-1 shadow-xl border-2 transition-transform ${
-                                  fac.type === 'TPA Sampah Akhir'
-                                    ? 'bg-rose-700 border-white ring-2 ring-rose-600'
-                                    : fac.type === 'TPST Pengolahan Akhir'
-                                    ? 'bg-purple-700 border-white ring-2 ring-purple-600'
-                                    : 'bg-amber-700 border-white ring-2 ring-amber-600'
-                                } ${isSelected ? 'scale-125' : 'scale-100 group-hover:scale-110'}`}
-                              >
-                                <Mountain className="w-3.5 h-3.5 text-amber-300" />
-                                <span>
-                                  {fac.type === 'TPA Sampah Akhir'
-                                    ? 'TPA AKHIR'
-                                    : fac.type === 'TPST Pengolahan Akhir'
-                                    ? 'TPST RDF'
-                                    : 'TPA B3'}
-                                </span>
-                              </div>
-                              <div
-                                className={`w-2.5 h-2.5 rotate-45 -mt-1 border-r-2 border-b-2 border-white ${
-                                  fac.type === 'TPA Sampah Akhir'
-                                    ? 'bg-rose-700'
-                                    : fac.type === 'TPST Pengolahan Akhir'
-                                    ? 'bg-purple-700'
-                                    : 'bg-amber-700'
-                                }`}
-                              ></div>
-                            </div>
+                            <Pin
+                              background={pinBg}
+                              glyphColor="#ffffff"
+                              borderColor="#ffffff"
+                              scale={isSelected ? 1.25 : 0.95}
+                            />
                           </AdvancedMarker>
                         );
-                      }
+                      })}
 
-                      // Standard reduction facilities (TPS3R, Drop Box, Bank Sampah)
-                      const pinBg =
-                        fac.type === 'TPS3R'
-                          ? '#059669' // Emerald
-                          : fac.type === 'Drop Box Kampus'
-                          ? '#2563eb' // Blue
-                          : '#d97706'; // Amber
-
-                      return (
-                        <AdvancedMarker
-                          key={fac.id}
-                          position={{ lat: fac.latitude, lng: fac.longitude }}
-                          onClick={() => handleSelectFacility(fac)}
-                          title={`${fac.name} (Titik Pilah Reduksi Hulu)`}
+                      {/* InfoWindow for Active Facility */}
+                      {activeInfoWindow && (
+                        <InfoWindow
+                          position={{ lat: activeInfoWindow.latitude, lng: activeInfoWindow.longitude }}
+                          onCloseClick={() => setActiveInfoWindow(null)}
                         >
-                          <Pin
-                            background={pinBg}
-                            glyphColor="#ffffff"
-                            borderColor="#ffffff"
-                            scale={isSelected ? 1.25 : 0.95}
-                          />
-                        </AdvancedMarker>
-                      );
-                    })}
+                          <div className="p-1 max-w-xs text-xs space-y-1.5 text-slate-900">
+                            <div className="flex items-center gap-1.5">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                                  activeInfoWindow.isFinalLandfill
+                                    ? 'bg-rose-100 text-rose-900 border border-rose-300'
+                                    : 'bg-emerald-100 text-emerald-800'
+                                }`}
+                              >
+                                {activeInfoWindow.type}
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-bold">
+                                {(activeInfoWindow as any).liveDistanceMeters < 1000
+                                  ? `${(activeInfoWindow as any).liveDistanceMeters}m`
+                                  : `${(activeInfoWindow as any).liveDistanceKm} km dari Anda`}
+                              </span>
+                            </div>
+                            <h4 className="font-bold text-slate-900 text-xs">
+                              {activeInfoWindow.name}
+                            </h4>
+                            <p className="text-[11px] text-slate-600">
+                              {activeInfoWindow.address}
+                            </p>
 
-                    {/* InfoWindow for Active Facility */}
-                    {activeInfoWindow && (
-                      <InfoWindow
-                        position={{ lat: activeInfoWindow.latitude, lng: activeInfoWindow.longitude }}
-                        onCloseClick={() => setActiveInfoWindow(null)}
-                      >
-                        <div className="p-1 max-w-xs text-xs space-y-1.5 text-slate-900">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
-                                activeInfoWindow.isFinalLandfill
-                                  ? 'bg-rose-100 text-rose-900 border border-rose-300'
-                                  : 'bg-emerald-100 text-emerald-800'
-                              }`}
+                            {activeInfoWindow.isFinalLandfill ? (
+                              <div className="p-1.5 bg-rose-50 rounded border border-rose-200 space-y-0.5 text-[10px]">
+                                <div className="font-bold text-rose-900">
+                                  Status: {activeInfoWindow.landfillStatus}
+                                </div>
+                                <div className="text-slate-700">
+                                  Tinggi Gunungan: <strong>{activeInfoWindow.mountainHeightM} meter</strong>
+                                </div>
+                                <div className="text-slate-700">
+                                  Pasokan Harian: <strong>{activeInfoWindow.dailyIncomingTons} ton/hari</strong>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="text-[10px] text-slate-600">
+                                <strong>Beban:</strong> {activeInfoWindow.currentLoadKg} / {activeInfoWindow.capacityDailyKg} kg/hari
+                              </div>
+                            )}
+
+                            <a
+                              href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation ? `${userLocation.lat},${userLocation.lng}` : ''}&destination=${activeInfoWindow.latitude},${activeInfoWindow.longitude}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="mt-1 block text-center py-1 px-2 rounded bg-rose-600 text-white font-bold text-[10px] hover:bg-rose-700"
                             >
-                              {activeInfoWindow.type}
-                            </span>
-                            <span className="text-[10px] text-slate-500 font-bold">
-                              {(activeInfoWindow as any).liveDistanceMeters < 1000
-                                ? `${(activeInfoWindow as any).liveDistanceMeters}m`
-                                : `${(activeInfoWindow as any).liveDistanceKm} km dari Anda`}
+                              Buka Rute Navigasi Google Maps
+                            </a>
+                          </div>
+                        </InfoWindow>
+                      )}
+                    </Map>
+                  </APIProvider>
+                ) : (
+                  /* Interactive Topographic Vector Corridor Map */
+                  <div className="relative w-full h-full bg-[#0b1329] p-4 flex flex-col justify-between">
+                    {/* SVG Grid & Geographical Terrain Elements */}
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none opacity-20">
+                      <defs>
+                        <pattern id="corridorGrid" width="30" height="30" patternUnits="userSpaceOnUse">
+                          <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#38bdf8" strokeWidth="0.5" />
+                        </pattern>
+                      </defs>
+                      <rect width="100%" height="100%" fill="url(#corridorGrid)" />
+                    </svg>
+
+                    <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
+                      {/* Danau Unhas */}
+                      <ellipse cx="48" cy="22" rx="14" ry="7" fill="#0284c7" opacity="0.35" />
+                      <text x="44" y="23" fill="#7dd3fc" fontSize="2" fontWeight="bold" opacity="0.8">Danau Unhas</text>
+
+                      {/* Main Transport Corridor Line (Jl. Perintis Kemerdekaan -> Jl. Antang Raya -> TPA Tamangapa) */}
+                      <path
+                        d="M 50 18 L 46 36 L 40 54 L 46 72 L 52 86"
+                        fill="none"
+                        stroke="#f43f5e"
+                        strokeWidth="1.8"
+                        strokeDasharray="3 2"
+                        opacity="0.75"
+                      />
+                      {/* Highway text annotations */}
+                      <text x="32" y="44" fill="#fda4af" fontSize="1.8" fontWeight="600" opacity="0.7">Jl. Perintis Kemerdekaan</text>
+                      <text x="44" y="66" fill="#fda4af" fontSize="1.8" fontWeight="600" opacity="0.7">Jl. Antang Raya</text>
+
+                      {/* Tamangapa Landfill Mountain Area contour rings */}
+                      <ellipse cx="52" cy="86" rx="20" ry="10" fill="#be123c" opacity="0.18" />
+                      <ellipse cx="52" cy="86" rx="12" ry="6" fill="#be123c" opacity="0.25" />
+                      <ellipse cx="52" cy="86" rx="6" ry="3" fill="#e11d48" opacity="0.35" />
+                      <text x="38" y="93" fill="#fecdd3" fontSize="2.2" fontWeight="bold">Kawasan Gunungan Sampah TPA Tamangapa (35-40m)</text>
+                    </svg>
+
+                    {/* Top Mode Notice Banner */}
+                    <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-700/80 text-xs shadow-lg">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span className="font-bold text-slate-200">
+                          {mapAuthError
+                            ? 'Google Maps Key Memerlukan Verifikasi • Mode Topologi Koridor Aktif'
+                            : 'Mode Peta Topologi Koridor Kampus Aktif'}
+                        </span>
+                        <span className="hidden sm:inline text-[11px] text-slate-400">
+                          (Unhas Tamalanrea ➔ TPA Tamangapa ±10.4 km)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => setShowKeyPrompt(true)}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
+                        >
+                          <Key className="w-3 h-3" />
+                          <span>Atur API Key / Demo Key</span>
+                        </button>
+                        <a
+                          href="https://mapsplatform.google.com/maps-demo-key?utm_campaign=gmp_mcp_codeassist_v1_aistudio"
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-[11px] flex items-center gap-1 transition-colors"
+                        >
+                          <span>Demo Key Gratis</span>
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+
+                    {/* Interactive Facility Markers Placed via Proportional Geographic Positioning */}
+                    <div className="absolute inset-0 z-10 pointer-events-none">
+                      {filteredFacilities.map((fac) => {
+                        const isSelected = selectedFacility.id === fac.id;
+                        const isLandfill = fac.isFinalLandfill;
+
+                        // Geographic coordinate normalization (-5.122 to -5.185 lat, 119.460 to 119.525 lng)
+                        const latMin = -5.185;
+                        const latMax = -5.122;
+                        const lngMin = 119.460;
+                        const lngMax = 119.525;
+                        const topPct = Math.max(12, Math.min(88, ((fac.latitude - latMax) / (latMin - latMax)) * 74 + 14));
+                        const leftPct = Math.max(8, Math.min(92, ((fac.longitude - lngMin) / (lngMax - lngMin)) * 80 + 10));
+
+                        return (
+                          <div
+                            key={fac.id}
+                            style={{ top: `${topPct}%`, left: `${leftPct}%` }}
+                            className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer"
+                            onClick={() => {
+                              handleSelectFacility(fac);
+                              setActiveInfoWindow(fac);
+                            }}
+                          >
+                            {isLandfill ? (
+                              <div className="relative flex flex-col items-center group">
+                                {fac.type === 'TPA Sampah Akhir' && (
+                                  <span className="w-10 h-10 rounded-full bg-rose-500/30 ring-4 ring-rose-500/40 animate-ping absolute -top-1" />
+                                )}
+                                <div
+                                  className={`px-2.5 py-1 rounded-xl text-white font-black text-[10px] flex items-center gap-1 shadow-xl border-2 transition-transform ${
+                                    fac.type === 'TPA Sampah Akhir'
+                                      ? 'bg-rose-700 border-white ring-2 ring-rose-500'
+                                      : 'bg-purple-700 border-white ring-2 ring-purple-500'
+                                  } ${isSelected ? 'scale-125' : 'scale-100 hover:scale-110'}`}
+                                >
+                                  <Mountain className="w-3.5 h-3.5 text-amber-300" />
+                                  <span>{fac.name.split(' ')[0]}</span>
+                                </div>
+                                <div
+                                  className={`w-2.5 h-2.5 rotate-45 -mt-1 border-r-2 border-b-2 border-white ${
+                                    fac.type === 'TPA Sampah Akhir' ? 'bg-rose-700' : 'bg-purple-700'
+                                  }`}
+                                />
+                              </div>
+                            ) : (
+                              <div className="relative flex flex-col items-center group">
+                                <div
+                                  className={`px-2 py-0.5 rounded-lg text-[10px] font-bold shadow-md border transition-transform flex items-center gap-1 ${
+                                    isSelected
+                                      ? 'bg-emerald-500 text-white border-white scale-125 z-30'
+                                      : fac.type === 'TPS3R'
+                                      ? 'bg-emerald-700 text-emerald-100 border-emerald-400/50 hover:scale-110'
+                                      : 'bg-blue-700 text-blue-100 border-blue-400/50 hover:scale-110'
+                                  }`}
+                                >
+                                  <MapPin className="w-3 h-3" />
+                                  <span className="truncate max-w-[100px]">{fac.name}</span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+
+                      {/* User Location Geolocation Pin */}
+                      {userLocation && (
+                        <div
+                          style={{
+                            top: `${Math.max(12, Math.min(88, ((userLocation.lat - -5.122) / (-5.185 - -5.122)) * 74 + 14))}%`,
+                            left: `${Math.max(8, Math.min(92, ((userLocation.lng - 119.460) / (119.525 - 119.460)) * 80 + 10))}%`,
+                          }}
+                          className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-auto cursor-pointer z-30"
+                          onClick={() => setShowUserMarkerInfo(true)}
+                        >
+                          <div className="relative flex items-center justify-center">
+                            <span className="w-8 h-8 rounded-full bg-blue-500/40 ring-4 ring-blue-400/50 animate-ping absolute" />
+                            <span className="w-4 h-4 rounded-full bg-blue-600 border-2 border-white relative z-10 shadow-lg flex items-center justify-center">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white" />
                             </span>
                           </div>
-                          <h4 className="font-bold text-slate-900 text-xs">
-                            {activeInfoWindow.name}
-                          </h4>
-                          <p className="text-[11px] text-slate-600">
-                            {activeInfoWindow.address}
-                          </p>
-
-                          {activeInfoWindow.isFinalLandfill ? (
-                            <div className="p-1.5 bg-rose-50 rounded border border-rose-200 space-y-0.5 text-[10px]">
-                              <div className="font-bold text-rose-900">
-                                Status: {activeInfoWindow.landfillStatus}
-                              </div>
-                              <div className="text-slate-700">
-                                Tinggi Gunungan: <strong>{activeInfoWindow.mountainHeightM} meter</strong>
-                              </div>
-                              <div className="text-slate-700">
-                                Pasokan Harian: <strong>{activeInfoWindow.dailyIncomingTons} ton/hari</strong>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="text-[10px] text-slate-600">
-                              <strong>Beban:</strong> {activeInfoWindow.currentLoadKg} / {activeInfoWindow.capacityDailyKg} kg/hari
-                            </div>
-                          )}
-
-                          <a
-                            href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation ? `${userLocation.lat},${userLocation.lng}` : ''}&destination=${activeInfoWindow.latitude},${activeInfoWindow.longitude}`}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="mt-1 block text-center py-1 px-2 rounded bg-rose-600 text-white font-bold text-[10px] hover:bg-rose-700"
-                          >
-                            Buka Rute Navigasi Google Maps
-                          </a>
                         </div>
-                      </InfoWindow>
+                      )}
+                    </div>
+
+                    {/* Active Info Card Floating in Vector Mode */}
+                    {activeInfoWindow && (
+                      <div className="absolute top-16 right-4 z-30 max-w-xs p-3 rounded-xl bg-slate-900/95 backdrop-blur-md border border-slate-700 text-white text-xs shadow-2xl space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-black ${
+                              activeInfoWindow.isFinalLandfill
+                                ? 'bg-rose-500 text-white'
+                                : 'bg-emerald-500 text-white'
+                            }`}
+                          >
+                            {activeInfoWindow.type}
+                          </span>
+                          <button
+                            onClick={() => setActiveInfoWindow(null)}
+                            className="text-slate-400 hover:text-white font-bold"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                        <h4 className="font-bold text-sm text-slate-100">
+                          {activeInfoWindow.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-300">
+                          {activeInfoWindow.address}
+                        </p>
+                        {activeInfoWindow.isFinalLandfill ? (
+                          <div className="p-2 rounded-lg bg-rose-950/60 border border-rose-800/60 space-y-1 text-[11px]">
+                            <div className="text-rose-300 font-bold">
+                              Status: {activeInfoWindow.landfillStatus}
+                            </div>
+                            <div className="text-slate-200">
+                              Tinggi Gunungan: <strong>{activeInfoWindow.mountainHeightM} meter</strong>
+                            </div>
+                            <div className="text-slate-200">
+                              Pasokan Masuk: <strong>{activeInfoWindow.dailyIncomingTons} ton/hari</strong>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-[11px] text-slate-300">
+                            <strong>Beban Harian:</strong> {activeInfoWindow.currentLoadKg} / {activeInfoWindow.capacityDailyKg} kg
+                          </div>
+                        )}
+                        <a
+                          href={`https://www.google.com/maps/dir/?api=1&origin=${userLocation ? `${userLocation.lat},${userLocation.lng}` : ''}&destination=${activeInfoWindow.latitude},${activeInfoWindow.longitude}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-1 block text-center py-1.5 px-3 rounded-lg bg-rose-600 text-white font-bold text-[11px] hover:bg-rose-700 transition-colors"
+                        >
+                          Buka Navigasi Google Maps Eksternal
+                        </a>
+                      </div>
                     )}
-                  </Map>
-                </APIProvider>
+
+                    {/* Bottom Status strip */}
+                    <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-slate-800 text-[11px] text-slate-300 shadow-md">
+                      <div className="flex items-center gap-2">
+                        <Route className="w-4 h-4 text-rose-400" />
+                        <span>
+                          <strong>Koridor Angkut:</strong> Kampus UNHAS ➔ Jl. Perintis ➔ Jl. Antang ➔ TPA Tamangapa ({primaryTpa.liveDistanceKm} km)
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={handleFocusTPA}
+                          className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-[10px] transition-colors cursor-pointer"
+                        >
+                          Fokus TPA Tamangapa
+                        </button>
+                        <button
+                          onClick={handleFocusCampus}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] transition-colors cursor-pointer"
+                        >
+                          Fokus Kampus UNHAS
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Bottom Filter Strip */}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Navbar } from './components/Navbar';
+import { ConsoleLayout } from './components/ConsoleLayout';
+import { ConsoleDashboardView } from './components/ConsoleDashboardView';
 import { DashboardView } from './components/DashboardView';
 import { EducationView } from './components/EducationView';
 import { FacilitiesView } from './components/FacilitiesView';
@@ -13,6 +14,9 @@ import { PickupRequestModal } from './components/PickupRequestModal';
 import { AuthModal } from './components/AuthModal';
 import { UserInboxModal } from './components/UserInboxModal';
 import { PublicProfileModal } from './components/PublicProfileModal';
+import { OnboardingModal } from './components/OnboardingModal';
+import { SystemArchitectureModal } from './components/SystemArchitectureModal';
+import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import {
   INITIAL_USER,
   INITIAL_LEDGER_TRANSACTIONS,
@@ -30,10 +34,30 @@ import {
   ChatMessage,
   ReuseItem,
 } from './types';
-import { Leaf, ShieldCheck, CheckCircle2, MessageSquare, LogIn } from 'lucide-react';
+import { Leaf, ShieldCheck, CheckCircle2, MessageSquare, LogIn, Sparkles, Layers, Cookie, HelpCircle, BarChart3, LayoutGrid } from 'lucide-react';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<string>('edukasi');
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const [dashboardMode, setDashboardMode] = useState<'console' | 'analytics'>('console');
+
+  // Theme State (Light / Dark Mode, matching reference designs)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    const saved = localStorage.getItem('ecocampus_theme');
+    return saved === 'dark' ? 'dark' : 'light';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('ecocampus_theme', theme);
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
+  };
 
   // Authentication State
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
@@ -76,7 +100,22 @@ export default function App() {
   const [isInboxModalOpen, setIsInboxModalOpen] = useState<boolean>(false);
   const [isPublicProfileModalOpen, setIsPublicProfileModalOpen] = useState<boolean>(false);
   const [selectedPublicUser, setSelectedPublicUser] = useState<UserProfile | null>(null);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(false);
+  const [isArchitectureOpen, setIsArchitectureOpen] = useState<boolean>(false);
+  const [isPrivacyModalOpen, setIsPrivacyModalOpen] = useState<boolean>(false);
+  const [hasAcceptedCookies, setHasAcceptedCookies] = useState<boolean>(() => {
+    return localStorage.getItem('ecocampus_privacy_accepted') === 'true';
+  });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Check if first-time visitor to offer guided tour
+  useEffect(() => {
+    const seenTour = localStorage.getItem('ecocampus_tour_seen');
+    if (!seenTour) {
+      setIsOnboardingOpen(true);
+      localStorage.setItem('ecocampus_tour_seen', 'true');
+    }
+  }, []);
 
   const showAppToast = (msg: string) => {
     setToastMessage(msg);
@@ -285,21 +324,29 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 font-sans">
+    <div className="min-h-screen flex flex-col font-sans transition-colors duration-200">
       {/* Toast Notification */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 text-xs font-semibold animate-in fade-in slide-in-from-bottom-5 duration-200">
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 dark:bg-slate-800 text-white px-4 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-3 text-xs font-semibold animate-in fade-in slide-in-from-bottom-5 duration-200">
           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
           <span>{toastMessage}</span>
         </div>
       )}
 
-      {/* Main App Navigation */}
-      <Navbar
+      {/* Main 3-Column Console Architecture Layout */}
+      <ConsoleLayout
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         currentUser={currentUser}
         isLoggedIn={isLoggedIn}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        unreadMessagesCount={unreadMessagesCount}
+        onOpenInbox={() => setIsInboxModalOpen(true)}
+        onOpenMyProfile={() => {
+          setSelectedPublicUser(currentUser);
+          setIsPublicProfileModalOpen(true);
+        }}
         onOpenRoleModal={() => setIsRoleModalOpen(true)}
         onOpenSusModal={() => setIsSusModalOpen(true)}
         onOpenAuthModal={(mode) => {
@@ -307,35 +354,81 @@ export default function App() {
           setIsAuthModalOpen(true);
         }}
         onLogout={handleLogout}
-        onOpenInbox={() => setIsInboxModalOpen(true)}
-        onOpenMyProfile={() => {
-          setSelectedPublicUser(currentUser);
-          setIsPublicProfileModalOpen(true);
-        }}
-        unreadMessagesCount={unreadMessagesCount}
-      />
+        onOpenOnboarding={() => setIsOnboardingOpen(true)}
+        onOpenArchitecture={() => setIsArchitectureOpen(true)}
+        onOpenChat={handleOpenChatWithSeller}
+      >
+        {/* Dynamic View Content according to Active Tab */}
+        {activeTab === 'dashboard' && (
+          <div className="space-y-4">
+            {/* Mode Switcher: Console View (3-Column Layout from Reference) vs Deep Analytical View */}
+            <div className="flex items-center justify-between bg-white dark:bg-[#131b2e] border border-slate-200/90 dark:border-slate-800 rounded-2xl p-2 px-3 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-slate-700 dark:text-slate-300">
+                  Mode Tampilan:
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400 hidden sm:inline">
+                  {dashboardMode === 'console'
+                    ? 'Console Hub (Banner Hero, Trending Bursa Preloved & Akses Cepat)'
+                    : 'Dasbor Analitik (Grafik Emisi, Streak Harian & Penimbangan)'}
+                </span>
+              </div>
 
-      {/* Main Tab Content */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {activeTab === 'edukasi' && (
-          <EducationView
-            onOpenScanner={() => setActiveTab('scanner')}
-            onNavigateToScanner={() => setActiveTab('scanner')}
-            onNavigateToMap={() => setActiveTab('fasilitas')}
-            onNavigateToMarketplace={() => setActiveTab('komunitas')}
-          />
+              <div className="flex items-center gap-1 bg-slate-100 dark:bg-[#1a233a] p-1 rounded-xl">
+                <button
+                  onClick={() => setDashboardMode('console')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                    dashboardMode === 'console'
+                      ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <LayoutGrid className="w-3.5 h-3.5" />
+                  <span>Console Hub</span>
+                </button>
+                <button
+                  onClick={() => setDashboardMode('analytics')}
+                  className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold text-xs transition-all cursor-pointer ${
+                    dashboardMode === 'analytics'
+                      ? 'bg-emerald-500 text-slate-950 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <BarChart3 className="w-3.5 h-3.5" />
+                  <span>Analisis Lengkap</span>
+                </button>
+              </div>
+            </div>
+
+            {dashboardMode === 'console' ? (
+              <ConsoleDashboardView
+                currentUser={currentUser}
+                transactions={transactions}
+                onNavigate={setActiveTab}
+                onOpenChatWithSeller={handleOpenChatWithSeller}
+                onOpenSusModal={() => setIsSusModalOpen(true)}
+              />
+            ) : (
+              <DashboardView
+                currentUser={currentUser}
+                transactions={transactions}
+                onNavigate={setActiveTab}
+                onOpenSusModal={() => setIsSusModalOpen(true)}
+                susScore={susScore}
+                onNavigateToScanner={() => setActiveTab('scanner')}
+                onNavigateToGamification={() => setActiveTab('gamification')}
+                onNavigateToEducation={() => setActiveTab('edukasi')}
+              />
+            )}
+          </div>
         )}
 
-        {activeTab === 'dashboard' && (
-          <DashboardView
+        {activeTab === 'komunitas' && (
+          <CommunityView
             currentUser={currentUser}
-            transactions={transactions}
-            onNavigate={setActiveTab}
-            onOpenSusModal={() => setIsSusModalOpen(true)}
-            susScore={susScore}
-            onNavigateToScanner={() => setActiveTab('scanner')}
-            onNavigateToGamification={() => setActiveTab('gamification')}
-            onNavigateToEducation={() => setActiveTab('edukasi')}
+            onRedeemReward={handleRedeemReward}
+            onOpenChatWithSeller={handleOpenChatWithSeller}
+            onOpenUserProfile={handleOpenUserProfile}
           />
         )}
 
@@ -356,12 +449,12 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'komunitas' && (
-          <CommunityView
-            currentUser={currentUser}
-            onRedeemReward={handleRedeemReward}
-            onOpenChatWithSeller={handleOpenChatWithSeller}
-            onOpenUserProfile={handleOpenUserProfile}
+        {activeTab === 'edukasi' && (
+          <EducationView
+            onOpenScanner={() => setActiveTab('scanner')}
+            onNavigateToScanner={() => setActiveTab('scanner')}
+            onNavigateToMap={() => setActiveTab('fasilitas')}
+            onNavigateToMarketplace={() => setActiveTab('komunitas')}
           />
         )}
 
@@ -387,61 +480,64 @@ export default function App() {
             }}
           />
         )}
+      </ConsoleLayout>
 
-        {/* Fallback in case of unknown tab */}
-        {!['edukasi', 'dashboard', 'scanner', 'fasilitas', 'komunitas', 'gamification', 'ledger'].includes(activeTab) && (
-          <DashboardView
-            currentUser={currentUser}
-            transactions={transactions}
-            onNavigate={setActiveTab}
-            onOpenSusModal={() => setIsSusModalOpen(true)}
-            susScore={susScore}
-          />
-        )}
-      </main>
-
-      {/* Footer */}
-      <footer className="mt-auto border-t border-slate-200 bg-white py-8 text-xs text-slate-500">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold">
-              <Leaf className="w-4 h-4" />
+      {/* Cookie & Privacy Consent Banner (GDPR / PDPL Compliance) */}
+      {!hasAcceptedCookies && (
+        <div 
+          id="cookie-consent-banner"
+          className="fixed bottom-4 left-4 right-4 sm:left-6 sm:right-auto sm:max-w-md z-50 bg-white border border-slate-200 rounded-2xl p-4 shadow-2xl animate-in slide-in-from-bottom-5 duration-200"
+        >
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+              <Cookie className="w-4 h-4" />
             </div>
-            <div>
-              <div className="font-bold text-slate-900">
-                EcoCampus 3R • Platform Edukasi, Reduksi Sampah & Sirkularitas Kampus
-              </div>
-              <p className="text-[11px] text-slate-500">
-                Edukasi 3R, Peta TPA Akhir, Bursa Reuse Preloved Sivitas Kampus, dan Fitur Komunikasi Antar-Pengguna
+            <div className="flex-1 text-xs">
+              <div className="font-bold text-slate-900 mb-0.5">Privasi & Penyimpanan Data Kampus</div>
+              <p className="text-slate-600 leading-snug text-[11px] mb-2.5">
+                EcoCampus 3R menyimpan data sesi bursa, riwayat scan, dan tantangan di penyimpanan lokal demi kecepatan akses & kepatuhan privasi (UU PDP).
               </p>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setHasAcceptedCookies(true);
+                    localStorage.setItem('ecocampus_privacy_accepted', 'true');
+                  }}
+                  id="accept-cookies-btn"
+                  className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors"
+                >
+                  Setuju & Lanjutkan
+                </button>
+                <button
+                  onClick={() => setIsPrivacyModalOpen(true)}
+                  id="view-privacy-policy-btn"
+                  className="px-2.5 py-1.5 text-slate-600 hover:text-slate-900 text-xs font-semibold hover:underline"
+                >
+                  Kebijakan Privasi
+                </button>
+              </div>
             </div>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-4 text-[11px]">
-            <span className="flex items-center gap-1 text-slate-600 font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>Sistem Akun SSO Kampus</span>
-            </span>
-            <span className="text-slate-300">|</span>
-            <button
-              onClick={() => setIsInboxModalOpen(true)}
-              className="flex items-center gap-1 text-emerald-700 font-bold hover:underline"
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Pesan Antar-Pengguna ({unreadMessagesCount})</span>
-            </button>
-            <span className="text-slate-300">|</span>
-            <button
-              onClick={() => setIsSusModalOpen(true)}
-              className="text-indigo-600 font-bold hover:underline"
-            >
-              Skor SUS: {susScore.toFixed(1)} / 100
-            </button>
           </div>
         </div>
-      </footer>
+      )}
 
       {/* Modals */}
+      <OnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+        onNavigateToTab={(tab) => setActiveTab(tab)}
+      />
+
+      <SystemArchitectureModal
+        isOpen={isArchitectureOpen}
+        onClose={() => setIsArchitectureOpen(false)}
+      />
+
+      <PrivacyPolicyModal
+        isOpen={isPrivacyModalOpen}
+        onClose={() => setIsPrivacyModalOpen(false)}
+      />
+
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
