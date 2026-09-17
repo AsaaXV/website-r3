@@ -15,7 +15,7 @@ export const PickupRequestModal: React.FC<PickupRequestModalProps> = ({
   currentUser,
   onSubmitRequest,
 }) => {
-  const [exactAddress, setExactAddress] = useState<string>('Lobi Utama Gedung Dekanat FT Unhas, Tamalanrea');
+  const [exactAddress, setExactAddress] = useState<string>('Lobi Dekanat & Gedung Elektro FT UNM, Kampus Parangtambung');
   const [wasteTypes, setWasteTypes] = useState<WasteCategoryType[]>(['kertas', 'plastik']);
   const [estimatedWeight, setEstimatedWeight] = useState<number>(8.5);
   const [whatsapp, setWhatsapp] = useState<string>('0812-3456-7890');

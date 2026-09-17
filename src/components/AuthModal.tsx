@@ -19,10 +19,22 @@ import {
   RefreshCw,
   Clock,
   Send,
-  Check
+  Check,
+  Code,
 } from 'lucide-react';
 import { UserProfile, UserRole } from '../types';
 import { DEMO_ACCOUNTS } from '../data/mockData';
+import {
+  DEV_ACCOUNT_PROFILE,
+  validateCredentials,
+  saveRegisteredAccount,
+} from '../utils/authAccounts';
+import {
+  auth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile,
+} from '../utils/firebase';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -50,6 +62,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [loginError, setLoginError] = useState('');
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutTimer, setLockoutTimer] = useState<number | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Register form state
   const [regName, setRegName] = useState('');
@@ -112,7 +125,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     return { score: 2, label: 'Sedang (disarankan kombinasikan angka/simbol)', color: 'bg-amber-500' };
   };
 
-  const handleLoginSubmit = (e: React.FormEvent) => {
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (lockoutTimer !== null && lockoutTimer > 0) {
       setLoginError(`Akun sementara terkunci demi keamanan. Coba lagi dalam ${lockoutTimer} detik.`);
@@ -126,44 +139,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       return;
     }
 
-    // Match with existing demo accounts
-    const matched = DEMO_ACCOUNTS.find(
-      (u) =>
-        u.email.toLowerCase() === query ||
-        u.name.toLowerCase() === query ||
-        u.name.toLowerCase().includes(query) ||
-        (query.includes('@') && u.email.toLowerCase().includes(query.split('@')[0]))
-    );
+    const emailToUse = query.includes('@') ? query : `${query}@student.unm.ac.id`;
 
-    // Simulate password validation if user entered demo user with intentional invalid pass
-    if (loginPassword && loginPassword.trim() === 'wrong_password') {
-      const nextFail = failedAttempts + 1;
-      setFailedAttempts(nextFail);
-      if (nextFail >= 5) {
-        setLockoutTimer(30);
-        setLoginError('Terlalu banyak percobaan gagal (5x). Sistem terkunci 30 detik untuk perlindungan brute-force.');
-      } else {
-        setLoginError(`Kata sandi tidak cocok. Sisa percobaan: ${5 - nextFail} kali.`);
-      }
-      return;
-    }
+    // 1. Coba otentikasi Firebase Auth jika terhubung
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, emailToUse, loginPassword);
+      const fbUser = userCredential.user;
 
-    setFailedAttempts(0);
+      const matchedFb = DEMO_ACCOUNTS.find(
+        (u) => u.email.toLowerCase() === fbUser.email?.toLowerCase()
+      );
 
-    if (matched) {
-      onLogin(matched);
-      onClose();
-    } else {
-      // Create user session immediately with provided credentials
-      const isEmail = query.includes('@');
-      const cleanName = isEmail
-        ? query.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
-        : loginEmail.trim();
-
-      const newUser: UserProfile = {
-        id: `usr_${Date.now()}`,
-        name: cleanName,
-        email: isEmail ? loginEmail.trim() : `${query}@gmail.com`,
+      const loggedUser: UserProfile = matchedFb || {
+        id: fbUser.uid,
+        name: fbUser.displayName || emailToUse.split('@')[0].replace(/[._-]/g, ' '),
+        email: fbUser.email || emailToUse,
         faculty: 'Warga & Sivitas EcoCampus',
         major: 'Pengguna Terdaftar',
         role: 'mahasiswa',
@@ -173,19 +163,68 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         currentStreakDays: 1,
         totalWeightDepositedKg: 0,
         avatarUrl:
+          fbUser.photoURL ||
           'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
         badges: [
           {
             id: 'b_welcome',
-            title: 'Warga Baru EcoCampus',
-            description: 'Bergabung dalam ekosistem sirkularitas terotentikasi.',
+            title: 'Warga Terverifikasi Firebase',
+            description: 'Masuk melalui otentikasi Firebase.',
             icon: 'Sprout',
             unlockedAt: new Date().toISOString().split('T')[0],
           },
         ],
       };
-      onLogin(newUser);
+
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('ecocampus_logged_in', 'true');
+      localStorage.setItem('ecocampus_user_profile', JSON.stringify(loggedUser));
+      setFailedAttempts(0);
+      setIsLoading(false);
+      onLogin(loggedUser);
       onClose();
+      return;
+    } catch (fbErr: any) {
+      console.info('Firebase auth in modal:', fbErr?.code || fbErr?.message);
+    }
+
+    // 1. Dev Admin Check: jika email/user admin dan sandi 12345
+    const rawPass = loginPassword.trim();
+    if ((query === 'admin' || query === 'admin@web.com') && rawPass === '12345') {
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('ecocampus_logged_in', 'true');
+      localStorage.setItem('ecocampus_user_profile', JSON.stringify(DEV_ACCOUNT_PROFILE));
+      setFailedAttempts(0);
+      setIsLoading(false);
+      onLogin(DEV_ACCOUNT_PROFILE);
+      onClose();
+      return;
+    }
+
+    // 2. Validasi Akun Dev Khusus & Akun Sivitas Terdaftar (Strict Validation)
+    const validProfile = validateCredentials(loginEmail, loginPassword);
+    if (validProfile) {
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('ecocampus_logged_in', 'true');
+      localStorage.setItem('ecocampus_user_profile', JSON.stringify(validProfile));
+      setFailedAttempts(0);
+      setIsLoading(false);
+      onLogin(validProfile);
+      onClose();
+      return;
+    }
+
+    // 3. TOLAK AKSES jika salah (DILARANG MEMBOBOL/BYPASS!)
+    setIsLoading(false);
+    const nextFail = failedAttempts + 1;
+    setFailedAttempts(nextFail);
+    if (nextFail >= 5) {
+      setLockoutTimer(30);
+      setLoginError('Terlalu banyak percobaan gagal (5x). Sistem terkunci 30 detik untuk perlindungan keamanan.');
+    } else {
+      setLoginError(
+        'Email atau kata sandi tidak cocok! Akses ditolak. Gunakan akun dev admin@web.com (sandi: admin123) atau akun terdaftar.'
+      );
     }
   };
 
@@ -217,7 +256,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       email: isEmail ? regEmail.trim() : `${query}@ecocampus.id`,
       faculty: regCategory,
       major: regNote.trim() || 'Pengguna Terdaftar',
-      role: regRole,
+      role: 'mahasiswa', // Strict Rule 07: User baru selalu role MAHASISWA.
       ecoPoints: 250, // Welcome bonus points!
       xp: 500,
       level: 1,
@@ -252,6 +291,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   const handleConfirmVerification = () => {
     if (verificationData) {
+      saveRegisteredAccount(verificationData.email, regPassword, verificationData.pendingUser);
+      localStorage.setItem('isLoggedIn', 'true');
+      localStorage.setItem('ecocampus_logged_in', 'true');
+      localStorage.setItem('ecocampus_user_profile', JSON.stringify(verificationData.pendingUser));
       onLogin(verificationData.pendingUser);
       onClose();
     }
@@ -291,6 +334,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   const handleQuickDemoSelect = (user: UserProfile) => {
+    localStorage.setItem('isLoggedIn', 'true');
+    localStorage.setItem('ecocampus_logged_in', 'true');
+    localStorage.setItem('ecocampus_user_profile', JSON.stringify(user));
     onLogin(user);
     onClose();
   };
@@ -392,6 +438,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
 
             <form onSubmit={handleLoginSubmit} className="space-y-3.5">
+              {/* Dev Account Notice */}
+              <div className="p-3 rounded-2xl bg-amber-50 border border-amber-200 text-left space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                    <Code className="w-3.5 h-3.5 text-amber-600" />
+                    <span>Akun Khusus Pengembang (Dev)</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLoginEmail('admin@web.com');
+                      setLoginPassword('admin123');
+                      setLoginError('');
+                    }}
+                    className="px-2 py-0.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-[10px] font-bold transition-all cursor-pointer shadow-xs shrink-0"
+                  >
+                    Isi Otomatis
+                  </button>
+                </div>
+                <p className="text-[11px] text-amber-800 font-mono">
+                  Email: <strong>admin@web.com</strong> | Sandi: <strong>admin123</strong>
+                </p>
+              </div>
+
               {loginError && (
                 <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
@@ -490,6 +560,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 </span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {/* Dev Account Quick Option */}
+                <button
+                  type="button"
+                  onClick={() => handleQuickDemoSelect(DEV_ACCOUNT_PROFILE)}
+                  className={`flex items-center gap-2.5 p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                    currentUser?.id === DEV_ACCOUNT_PROFILE.id
+                      ? 'border-amber-500 bg-amber-50 ring-1 ring-amber-400'
+                      : 'border-amber-300 bg-amber-50/70 hover:bg-amber-100 hover:border-amber-400'
+                  }`}
+                >
+                  <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-extrabold text-[10px] shrink-0 shadow-xs">
+                    DEV
+                  </div>
+                  <div className="overflow-hidden">
+                    <div className="text-xs font-bold text-amber-950 truncate flex items-center gap-1">
+                      <span>Admin Developer</span>
+                    </div>
+                    <div className="text-[10px] text-amber-700 truncate font-mono">
+                      admin / 12345
+                    </div>
+                  </div>
+                </button>
+
                 {DEMO_ACCOUNTS.map((acc) => {
                   const isCurrent = currentUser?.id === acc.id;
                   return (
@@ -586,15 +679,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 <label className="block text-xs font-semibold text-slate-700 mb-1">
                   Peran Akun
                 </label>
-                <select
-                  value={regRole}
-                  onChange={(e) => setRegRole(e.target.value as UserRole)}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-slate-300 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none bg-white"
-                >
-                  <option value="mahasiswa">Pengguna / Warga Komunitas</option>
-                  <option value="petugas_tps">Operator / Petugas TPS3R</option>
-                  <option value="admin_kampus">Pengurus / Admin</option>
-                </select>
+                <div className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 bg-slate-100/80 text-slate-700 flex items-center justify-between">
+                  <span className="font-bold">Mahasiswa / Sivitas</span>
+                  <span className="text-[10px] text-emerald-700 font-semibold bg-emerald-100/60 px-2 py-0.5 rounded-md">
+                    Otomatis Default
+                  </span>
+                </div>
               </div>
             </div>
 

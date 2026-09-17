@@ -110,11 +110,11 @@ export const GisMapView: React.FC = () => {
       (err) => {
         // Fallback to campus coordinate if denied or in iframe sandbox
         console.warn('Geolocation error:', err.message);
-        // Default to Gedung Dekanat Fakultas Teknik UNHAS Tamalanrea
-        const fallbackCoord = { lat: -5.1345, lng: 119.4975 };
+        // Default to Gedung Dekanat Fakultas Teknik UNM Parangtambung
+        const fallbackCoord = { lat: -5.1889, lng: 119.4235 };
         setUserLocation(fallbackCoord);
         setGpsStatus('active');
-        setGpsMessage('Koordinat diposisikan ke Kampus UNHAS Tamalanrea (Gedung Dekanat FT).');
+        setGpsMessage('Koordinat diposisikan ke Kampus UNM Parangtambung (Gedung Dekanat FT).');
       },
       { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
     );
@@ -165,7 +165,7 @@ export const GisMapView: React.FC = () => {
             Sistem Informasi Geografis (GIS) & Peta Google Maps Akurat
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl">
-            Pemetaan geospasial titik TPS3R, Bank Sampah kawasan Tamalanrea & Makassar dengan koordinat presisi tinggi WGS 84, penentuan rute, serta simulasi Vehicle Routing Problem (VRP).
+            Pemetaan geospasial titik TPS3R, Bank Sampah kawasan UNM & Makassar dengan koordinat presisi tinggi WGS 84, penentuan rute, serta simulasi Vehicle Routing Problem (VRP).
           </p>
         </div>
 
@@ -294,7 +294,7 @@ export const GisMapView: React.FC = () => {
             <div className="flex items-center gap-2">
               <Compass className="w-4 h-4 text-emerald-400" />
               <span className="font-mono text-[11px] text-slate-300">
-                KOORDINAT PUSAT: -5.1328° S, 119.4932° E • KAMPUS TAMALANREA UNHAS
+                KOORDINAT PUSAT: -5.1878° S, 119.4892° E • KAMPUS UNM PARANGTAMBUNG & GUNUNGSARI
               </span>
             </div>
             <div className="hidden sm:flex items-center gap-3 text-[11px]">
@@ -339,13 +339,13 @@ export const GisMapView: React.FC = () => {
                 </svg>
 
                 <svg className="absolute inset-0 w-full h-full" viewBox="0 0 100 100" preserveAspectRatio="none">
-                  {/* Lake Unhas */}
+                  {/* UNM Parangtambung Green Area */}
                   <ellipse cx="44" cy="40" rx="14" ry="7" fill="#0369a1" opacity="0.4" />
-                  <text x="40" y="41" fill="#7dd3fc" fontSize="2.5" fontWeight="bold" opacity="0.7">Danau Unhas</text>
+                  <text x="35" y="41" fill="#7dd3fc" fontSize="2.5" fontWeight="bold" opacity="0.7">UNM Parangtambung</text>
 
                   {/* Main Arterial Roads */}
                   <path d="M 0 25 Q 40 28 100 15" fill="none" stroke="#334155" strokeWidth="2.5" />
-                  <text x="5" y="23" fill="#94a3b8" fontSize="2.2">Jl. Perintis Kemerdekaan (Poros Km 10)</text>
+                  <text x="5" y="23" fill="#94a3b8" fontSize="2.2">Jl. Mallengkeri / Daeng Tata Raya</text>
 
                   {/* Campus Inner Ring Roads */}
                   <path d="M 25 30 Q 30 70 65 65 Q 85 50 78 40 Q 60 25 25 30" fill="none" stroke="#1e293b" strokeWidth="2" strokeDasharray="2,1" />
@@ -450,7 +450,7 @@ export const GisMapView: React.FC = () => {
               <span className="hidden sm:inline">Kalkulasi: ST_DistanceSpheroid</span>
               <span className="text-slate-600 hidden sm:inline">|</span>
               <span className="text-slate-400">
-                {userLocation ? 'GPS Terhubung' : 'Tamalanrea Campus'}
+                {userLocation ? 'GPS Terhubung' : 'Kampus UNM'}
               </span>
             </div>
           </div>

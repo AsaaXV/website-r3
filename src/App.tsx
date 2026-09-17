@@ -1,16 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ConsoleLayout } from './components/ConsoleLayout';
 import { ConsoleDashboardView } from './components/ConsoleDashboardView';
+import { LoginGatewayView } from './components/LoginGatewayView';
 import { DashboardView } from './components/DashboardView';
 import { EducationView } from './components/EducationView';
-import { FacilitiesView } from './components/FacilitiesView';
 import { CommunityView } from './components/CommunityView';
 import { GamificationView } from './components/GamificationView';
 import { AIScannerView } from './components/AIScannerView';
 import { LedgerAuditView } from './components/LedgerAuditView';
-import { SusEvaluationModal } from './components/SusEvaluationModal';
 import { RoleSwitchModal } from './components/RoleSwitchModal';
 import { PickupRequestModal } from './components/PickupRequestModal';
+import { AdminDashboardView } from './components/AdminDashboardView';
+import { StudentSurveyModal } from './components/StudentSurveyModal';
+import { RoleApplicationModal } from './components/RoleApplicationModal';
+import {
+  getStoredSurveys,
+  getUserAnsweredSurveyIds,
+  isSurveyActiveForStudent,
+} from './utils/surveyStorage';
 import { AuthModal } from './components/AuthModal';
 import { UserInboxModal } from './components/UserInboxModal';
 import { PublicProfileModal } from './components/PublicProfileModal';
@@ -33,10 +40,45 @@ import {
   ChatThread,
   ChatMessage,
   ReuseItem,
+  Survey,
 } from './types';
+import {
+  getStoredUserChatThreads,
+  saveStoredUserChatThreads,
+  deliverMessageToRecipient,
+} from './utils/storage';
 import { Leaf, ShieldCheck, CheckCircle2, MessageSquare, LogIn, Sparkles, Layers, Cookie, HelpCircle, BarChart3, LayoutGrid } from 'lucide-react';
+import { useAuth } from './context/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { IdleSessionWarningModal } from './components/IdleSessionWarningModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 export default function App() {
+  const {
+    user: currentUser,
+    isLoggedIn,
+    login: handleLogin,
+    logout: handleLogout,
+    updateUser: setCurrentUser,
+    authNotice,
+    clearAuthNotice,
+  } = useAuth();
+
+  // AUTH GUARD (PROTEKSI ROUTE):
+  // Pengecekan status login di localStorage.
+  // Jika status di localStorage masih kosong/belum login, paksa kembalikan (redirect) ke Halaman Login.
+  // Dashboard HANYA boleh di-render jika sesi login valid.
+  const isLocalStorageAuthenticated = typeof window !== 'undefined' && localStorage.getItem('isLoggedIn') === 'true';
+  const isAuthenticated = Boolean(isLoggedIn && isLocalStorageAuthenticated);
+
+  useEffect(() => {
+    // Sinkronisasi Auth Guard: jika di localStorage tidak ada 'isLoggedIn' = 'true', paksa logout / reset ke login
+    const storedStatus = localStorage.getItem('isLoggedIn');
+    if (storedStatus !== 'true' && isLoggedIn) {
+      handleLogout('Sesi Anda belum login atau telah berakhir.');
+    }
+  }, [isLoggedIn, handleLogout]);
+
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [dashboardMode, setDashboardMode] = useState<'console' | 'analytics'>('console');
 
@@ -59,40 +101,37 @@ export default function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  // Authentication State
-  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
-    const saved = localStorage.getItem('ecocampus_logged_in');
-    return saved !== null ? saved === 'true' : true;
-  });
-
-  const [currentUser, setCurrentUser] = useState<UserProfile>(() => {
-    const saved = localStorage.getItem('ecocampus_user_profile');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return INITIAL_USER;
-      }
-    }
-    return INITIAL_USER;
-  });
-
-  // Save session to localStorage
-  useEffect(() => {
-    localStorage.setItem('ecocampus_logged_in', String(isLoggedIn));
-    localStorage.setItem('ecocampus_user_profile', JSON.stringify(currentUser));
-  }, [isLoggedIn, currentUser]);
-
   const [transactions, setTransactions] = useState<LedgerTransaction[]>(INITIAL_LEDGER_TRANSACTIONS);
   const [susScore, setSusScore] = useState<number>(88.5);
   const [pickupRequests, setPickupRequests] = useState<PickupRequest[]>([]);
 
-  // Chat & Messaging State (Inter-User Feature)
-  const [chatThreads, setChatThreads] = useState<ChatThread[]>(INITIAL_CHAT_THREADS);
+  // Chat & Messaging State (Strictly isolated per user session)
+  const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => {
+    if (isLoggedIn && currentUser?.id) {
+      return getStoredUserChatThreads(currentUser.id, currentUser.name);
+    }
+    return [];
+  });
   const [activeChatThreadId, setActiveChatThreadId] = useState<string | null>(null);
+  const lastSentMessageRef = useRef<{ text: string; time: number; threadId: string } | null>(null);
+
+  // Sync and isolate chat threads whenever authenticated user session changes or logs out
+  useEffect(() => {
+    if (!isLoggedIn || !currentUser?.id) {
+      setChatThreads([]);
+      setActiveChatThreadId(null);
+      setIsInboxModalOpen(false);
+    } else {
+      const userThreads = getStoredUserChatThreads(currentUser.id, currentUser.name);
+      setChatThreads(userThreads);
+      setActiveChatThreadId(userThreads.length > 0 ? userThreads[0].id : null);
+    }
+  }, [isLoggedIn, currentUser?.id, currentUser?.name]);
 
   // Modals state
   const [isRoleModalOpen, setIsRoleModalOpen] = useState<boolean>(false);
+  const [isRoleApplicationModalOpen, setIsRoleApplicationModalOpen] = useState<boolean>(false);
+  const [isStudentSurveyModalOpen, setIsStudentSurveyModalOpen] = useState<boolean>(false);
   const [isSusModalOpen, setIsSusModalOpen] = useState<boolean>(false);
   const [isPickupModalOpen, setIsPickupModalOpen] = useState<boolean>(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
@@ -108,14 +147,34 @@ export default function App() {
   });
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Check if first-time visitor to offer guided tour
+  // Dynamic Surveys State
+  const [surveys, setSurveys] = useState<Survey[]>(() => getStoredSurveys());
+  const [answeredSurveyIds, setAnsweredSurveyIds] = useState<string[]>(() =>
+    getUserAnsweredSurveyIds(currentUser?.id || '')
+  );
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      setAnsweredSurveyIds(getUserAnsweredSurveyIds(currentUser.id));
+    }
+    setSurveys(getStoredSurveys());
+  }, [currentUser?.id]);
+
+  // Survei yang valid dan tersedia khusus untuk mahasiswa saat ini (menggunakan isSurveyActiveForStudent)
+  const availableSurveysForStudent = surveys.filter((s) =>
+    isSurveyActiveForStudent(s, currentUser?.id || '', answeredSurveyIds)
+  );
+  const activeSurveysCount = availableSurveysForStudent.length;
+  const totalManagedSurveysCount = surveys.length;
+
+  // Check if first-time visitor to offer guided tour once logged in
   useEffect(() => {
     const seenTour = localStorage.getItem('ecocampus_tour_seen');
-    if (!seenTour) {
+    if (!seenTour && isLoggedIn) {
       setIsOnboardingOpen(true);
       localStorage.setItem('ecocampus_tour_seen', 'true');
     }
-  }, []);
+  }, [isLoggedIn]);
 
   const showAppToast = (msg: string) => {
     setToastMessage(msg);
@@ -128,17 +187,13 @@ export default function App() {
     0
   );
 
-  // Handle Login & Logout
-  const handleLogin = (user: UserProfile) => {
-    setCurrentUser(user);
-    setIsLoggedIn(true);
-    showAppToast(`Selamat datang kembali, ${user.name}!`);
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    showAppToast('Anda telah keluar dari akun. Menjelajah dalam Mode Tamu.');
-  };
+  // Sync Auth notices from AuthContext (e.g. idle timeout, login/logout events)
+  useEffect(() => {
+    if (authNotice) {
+      showAppToast(authNotice);
+      clearAuthNotice();
+    }
+  }, [authNotice, clearAuthNotice]);
 
   // Handle transaction recording
   const handleRecordTransaction = (newTx: LedgerTransaction) => {
@@ -187,40 +242,90 @@ export default function App() {
     return true;
   };
 
-  // Send Message in Inter-User Chat
+  // Send Message in Inter-User Chat (Strictly isolated per user, no auto-replies, no unwanted redirects)
   const handleSendMessage = (threadId: string, text: string) => {
-    setChatThreads((prevThreads) =>
-      prevThreads.map((thread) => {
-        if (thread.id === threadId) {
-          const newMsg: ChatMessage = {
-            id: `msg_${Date.now()}`,
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            recipientId: thread.participantId,
-            recipientName: thread.participantName,
-            text,
-            timestamp: new Date().toLocaleTimeString('id-ID', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }) + ' WITA',
-            isSelf: true,
-          };
-          return {
-            ...thread,
-            lastMessage: text,
-            lastTimestamp: 'Baru saja',
-            messages: [...thread.messages, newMsg],
-          };
-        }
-        return thread;
-      })
-    );
+    const trimmed = text.trim();
+    if (!trimmed || !currentUser?.id) return;
+
+    // Deduplication guard: prevent same message within 800ms to same thread
+    const now = Date.now();
+    if (
+      lastSentMessageRef.current &&
+      lastSentMessageRef.current.threadId === threadId &&
+      lastSentMessageRef.current.text === trimmed &&
+      now - lastSentMessageRef.current.time < 800
+    ) {
+      return;
+    }
+    lastSentMessageRef.current = { text: trimmed, time: now, threadId };
+
+    const targetThread = chatThreads.find((t) => t.id === threadId);
+    if (!targetThread) return;
+
+    const messageId = `msg_${now}_${Math.random().toString(36).substring(2, 6)}`;
+    const timestampStr =
+      new Date().toLocaleTimeString('id-ID', {
+        hour: '2-digit',
+        minute: '2-digit',
+      }) + ' WITA';
+
+    const newMsg: ChatMessage = {
+      id: messageId,
+      senderId: currentUser.id,
+      senderName: currentUser.name,
+      recipientId: targetThread.participantId,
+      recipientName: targetThread.participantName,
+      text: trimmed,
+      timestamp: timestampStr,
+      isSelf: true,
+    };
+
+    const updatedThreads = chatThreads.map((thread) => {
+      if (thread.id === threadId) {
+        return {
+          ...thread,
+          lastMessage: trimmed,
+          lastTimestamp: 'Baru saja',
+          messages: [...thread.messages, newMsg],
+        };
+      }
+      return thread;
+    });
+
+    setChatThreads(updatedThreads);
+    saveStoredUserChatThreads(currentUser.id, updatedThreads);
+
+    // Real P2P delivery: save to recipient account storage for seamless multi-account testing
+    if (targetThread.participantId) {
+      deliverMessageToRecipient(
+        targetThread.participantId,
+        newMsg,
+        currentUser,
+        targetThread.itemContext
+      );
+    }
   };
 
   // Open Chat with Seller or Peer
   const handleOpenChatWithSeller = (sellerName: string, item?: ReuseItem) => {
-    // Find matching thread or create one
-    let existing = chatThreads.find(
+    if (!isLoggedIn || !currentUser?.id) {
+      setAuthModalMode('login');
+      setIsAuthModalOpen(true);
+      showAppToast('Silakan masuk akun terlebih dahulu untuk mengirim pesan.');
+      return;
+    }
+
+    // Guard: Prevent sending message to self
+    if (
+      sellerName.trim().toLowerCase() === currentUser.name.trim().toLowerCase() ||
+      (item && item.donorName && item.donorName.trim().toLowerCase() === currentUser.name.trim().toLowerCase())
+    ) {
+      showAppToast('Ini adalah barang/unggahan Anda sendiri.');
+      return;
+    }
+
+    // Find matching thread in current user's threads
+    const existing = chatThreads.find(
       (t) => t.participantName.toLowerCase() === sellerName.toLowerCase()
     );
 
@@ -232,54 +337,65 @@ export default function App() {
         (acc) => acc.name.toLowerCase() === sellerName.toLowerCase()
       );
 
-      const newThreadId = `thread_${Date.now()}`;
+      const newThreadId = `thread_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const timestampStr =
+        new Date().toLocaleTimeString('id-ID', {
+          hour: '2-digit',
+          minute: '2-digit',
+        }) + ' WITA';
+
+      const itemCtx = item
+        ? {
+            id: item.id,
+            title: item.title,
+            imageUrl: item.imageUrl,
+            price: item.isFree
+              ? 'GRATIS (Hibah)'
+              : item.priceRupiah
+              ? `Rp ${item.priceRupiah.toLocaleString('id-ID')}`
+              : `${item.pointPrice} Pts`,
+          }
+        : undefined;
+
+      const initMessage: ChatMessage = {
+        id: `msg_init_${Date.now()}`,
+        senderId: currentUser.id,
+        senderName: currentUser.name,
+        recipientId: matchedProfile?.id || `peer_${sellerName.toLowerCase().replace(/\s+/g, '_')}`,
+        recipientName: sellerName,
+        text: item
+          ? `Halo kak ${sellerName}, saya mahasiswa tertarik dengan barang "${item.title}". Apakah masih tersedia untuk COD di kampus?`
+          : 'Halo kak, salam lestari!',
+        timestamp: timestampStr,
+        isSelf: true,
+        itemTitle: item?.title,
+      };
+
       const newThread: ChatThread = {
         id: newThreadId,
-        participantId: matchedProfile?.id || `peer_${Date.now()}`,
+        participantId: matchedProfile?.id || `peer_${sellerName.toLowerCase().replace(/\s+/g, '_')}`,
         participantName: sellerName,
         participantAvatar:
           matchedProfile?.avatarUrl ||
           'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
         participantRole: matchedProfile?.role === 'petugas_tps' ? 'Petugas TPST' : 'Mahasiswa',
-        participantFaculty: matchedProfile?.faculty || 'Kampus Unhas',
+        participantFaculty: matchedProfile?.faculty || 'Kampus UNM',
         onlineStatus: 'online',
-        lastMessage: item ? `Halo kak, saya tertarik dengan ${item.title}` : 'Halo rekan mahasiswa!',
+        lastMessage: initMessage.text,
         lastTimestamp: 'Baru saja',
         unreadCount: 0,
-        itemContext: item
-          ? {
-              id: item.id,
-              title: item.title,
-              imageUrl: item.imageUrl,
-              price: item.isFree
-                ? 'GRATIS (Hibah)'
-                : item.priceRupiah
-                ? `Rp ${item.priceRupiah.toLocaleString('id-ID')}`
-                : `${item.pointPrice} Pts`,
-            }
-          : undefined,
-        messages: [
-          {
-            id: `msg_init_${Date.now()}`,
-            senderId: currentUser.id,
-            senderName: currentUser.name,
-            recipientId: matchedProfile?.id || 'peer',
-            recipientName: sellerName,
-            text: item
-              ? `Halo kak ${sellerName}, saya mahasiswa tertarik dengan barang "${item.title}". Apakah masih tersedia untuk COD di kampus?`
-              : 'Halo kak, salam lestari!',
-            timestamp: new Date().toLocaleTimeString('id-ID', {
-              hour: '2-digit',
-              minute: '2-digit',
-            }) + ' WITA',
-            isSelf: true,
-            itemTitle: item?.title,
-          },
-        ],
+        itemContext: itemCtx,
+        messages: [initMessage],
       };
 
-      setChatThreads((prev) => [newThread, ...prev]);
+      const updated = [newThread, ...chatThreads];
+      setChatThreads(updated);
+      saveStoredUserChatThreads(currentUser.id, updated);
       setActiveChatThreadId(newThreadId);
+
+      if (newThread.participantId) {
+        deliverMessageToRecipient(newThread.participantId, initMessage, currentUser, itemCtx);
+      }
     }
 
     setIsInboxModalOpen(true);
@@ -333,31 +449,58 @@ export default function App() {
         </div>
       )}
 
-      {/* Main 3-Column Console Architecture Layout */}
-      <ConsoleLayout
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        currentUser={currentUser}
-        isLoggedIn={isLoggedIn}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        unreadMessagesCount={unreadMessagesCount}
-        onOpenInbox={() => setIsInboxModalOpen(true)}
-        onOpenMyProfile={() => {
-          setSelectedPublicUser(currentUser);
-          setIsPublicProfileModalOpen(true);
-        }}
-        onOpenRoleModal={() => setIsRoleModalOpen(true)}
-        onOpenSusModal={() => setIsSusModalOpen(true)}
-        onOpenAuthModal={(mode) => {
-          setAuthModalMode(mode);
-          setIsAuthModalOpen(true);
-        }}
-        onLogout={handleLogout}
-        onOpenOnboarding={() => setIsOnboardingOpen(true)}
-        onOpenArchitecture={() => setIsArchitectureOpen(true)}
-        onOpenChat={handleOpenChatWithSeller}
-      >
+      {/* ========================================================================= */}
+      {/* AUTH GUARD: DEFAULT ROUTE WAJIB LOGIN                                      */}
+      {/* Saat website pertama kali dibuka (URL root /), komponen yang HARUS muncul  */}
+      {/* pertama kali adalah Halaman Login, BUKAN Dashboard.                        */}
+      {/* Dashboard HANYA boleh di-render jika sesi login valid.                      */}
+      {/* ========================================================================= */}
+      {!isAuthenticated ? (
+        <LoginGatewayView
+          onLogin={(user) => {
+            handleLogin(user);
+            setActiveTab('dashboard');
+          }}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onOpenArchitecture={() => setIsArchitectureOpen(true)}
+          onOpenSusModal={() => setIsSusModalOpen(true)}
+          onOpenPrivacyPolicy={() => setIsPrivacyModalOpen(true)}
+        />
+      ) : (
+        /* Main 3-Column Console Architecture Layout */
+        <ConsoleLayout
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          currentUser={currentUser}
+          isLoggedIn={isAuthenticated}
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          unreadMessagesCount={unreadMessagesCount}
+          onOpenInbox={() => setIsInboxModalOpen(true)}
+          onOpenMyProfile={() => {
+            setSelectedPublicUser(currentUser);
+            setIsPublicProfileModalOpen(true);
+          }}
+          onOpenRoleModal={
+            currentUser.role === 'admin' || currentUser.role === 'admin_kampus'
+              ? () => setIsRoleModalOpen(true)
+              : undefined
+          }
+          onOpenRoleApplicationModal={() => setIsRoleApplicationModalOpen(true)}
+          onOpenSurveyModal={() => setIsStudentSurveyModalOpen(true)}
+          activeSurveysCount={activeSurveysCount}
+          totalManagedSurveysCount={totalManagedSurveysCount}
+          onOpenSusModal={() => setIsSusModalOpen(true)}
+          onOpenAuthModal={(mode) => {
+            setAuthModalMode(mode);
+            setIsAuthModalOpen(true);
+          }}
+          onLogout={handleLogout}
+          onOpenOnboarding={() => setIsOnboardingOpen(true)}
+          onOpenArchitecture={() => setIsArchitectureOpen(true)}
+          onOpenChat={handleOpenChatWithSeller}
+        >
         {/* Dynamic View Content according to Active Tab */}
         {activeTab === 'dashboard' && (
           <div className="space-y-4">
@@ -406,15 +549,14 @@ export default function App() {
                 transactions={transactions}
                 onNavigate={setActiveTab}
                 onOpenChatWithSeller={handleOpenChatWithSeller}
-                onOpenSusModal={() => setIsSusModalOpen(true)}
               />
             ) : (
               <DashboardView
                 currentUser={currentUser}
                 transactions={transactions}
                 onNavigate={setActiveTab}
-                onOpenSusModal={() => setIsSusModalOpen(true)}
-                susScore={susScore}
+                onOpenSurveyModal={() => setIsStudentSurveyModalOpen(true)}
+                activeSurveysCount={activeSurveysCount}
                 onNavigateToScanner={() => setActiveTab('scanner')}
                 onNavigateToGamification={() => setActiveTab('gamification')}
                 onNavigateToEducation={() => setActiveTab('edukasi')}
@@ -424,28 +566,25 @@ export default function App() {
         )}
 
         {activeTab === 'komunitas' && (
-          <CommunityView
-            currentUser={currentUser}
-            onRedeemReward={handleRedeemReward}
-            onOpenChatWithSeller={handleOpenChatWithSeller}
-            onOpenUserProfile={handleOpenUserProfile}
-          />
+          <ErrorBoundary
+            fallbackTitle="Bursa & Papan Dicari Mengalami Kendala Sementara"
+            fallbackMessage="Terjadi kendala saat memuat modul bursa reuse dan papan dicari. Anda dapat menekan tombol coba pulihkan di bawah."
+          >
+            <CommunityView
+              currentUser={currentUser}
+              onRedeemReward={handleRedeemReward}
+              onOpenChatWithSeller={handleOpenChatWithSeller}
+              onOpenUserProfile={handleOpenUserProfile}
+            />
+          </ErrorBoundary>
         )}
 
         {activeTab === 'scanner' && (
           <AIScannerView
+            currentUser={currentUser}
             onNavigateToEducation={() => setActiveTab('edukasi')}
             onNavigateToCommunity={() => setActiveTab('komunitas')}
-            onNavigateToMap={() => setActiveTab('fasilitas')}
             onCancel={() => setActiveTab('dashboard')}
-          />
-        )}
-
-        {activeTab === 'fasilitas' && (
-          <FacilitiesView
-            onOpenPickupModal={() => setIsPickupModalOpen(true)}
-            onRequestPickup={() => setIsPickupModalOpen(true)}
-            currentUserRole={currentUser.role}
           />
         )}
 
@@ -453,7 +592,6 @@ export default function App() {
           <EducationView
             onOpenScanner={() => setActiveTab('scanner')}
             onNavigateToScanner={() => setActiveTab('scanner')}
-            onNavigateToMap={() => setActiveTab('fasilitas')}
             onNavigateToMarketplace={() => setActiveTab('komunitas')}
           />
         )}
@@ -469,18 +607,47 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'admin' && (
+          <ProtectedRoute
+            requiredRoles={['admin_kampus', 'admin']}
+            onUnauthorizedRedirect={() => setActiveTab('dashboard')}
+          >
+            <AdminDashboardView
+              currentUser={currentUser}
+              onNavigateToTab={setActiveTab}
+              onShowToast={showAppToast}
+            />
+          </ProtectedRoute>
+        )}
+
         {activeTab === 'ledger' && (
-          <LedgerAuditView
-            transactions={transactions}
-            onVerifyTransaction={(id) => {
-              setTransactions((prev) =>
-                prev.map((t) => (t.id === id ? { ...t, status: 'verified' } : t))
-              );
-              showAppToast('Aksi berhasil diverifikasi dan poin dikreditkan!');
-            }}
-          />
+          <ProtectedRoute
+            requiredRoles={['petugas_tps', 'admin_kampus', 'admin']}
+            onUnauthorizedRedirect={() => setActiveTab('dashboard')}
+          >
+            <LedgerAuditView
+              currentUser={currentUser}
+              transactions={transactions}
+              onVerifyTransaction={(id) => {
+                setTransactions((prev) =>
+                  prev.map((t) => (t.id === id ? { ...t, status: 'verified' } : t))
+                );
+                showAppToast('Aksi berhasil diverifikasi dan poin dikreditkan!');
+              }}
+              onRejectTransaction={(id) => {
+                setTransactions((prev) =>
+                  prev.map((t) => (t.id === id ? { ...t, status: 'flagged' } : t))
+                );
+                showAppToast('Transaksi ditandai perlu perbaikan audit.');
+              }}
+            />
+          </ProtectedRoute>
         )}
       </ConsoleLayout>
+      )}
+
+      {/* Idle Session Warning Modal (OWASP Inactivity Protocol) */}
+      <IdleSessionWarningModal />
 
       {/* Cookie & Privacy Consent Banner (GDPR / PDPL Compliance) */}
       {!hasAcceptedCookies && (
@@ -548,12 +715,16 @@ export default function App() {
 
       <UserInboxModal
         isOpen={isInboxModalOpen}
-        onClose={() => setIsInboxModalOpen(false)}
+        onClose={() => {
+          setIsInboxModalOpen(false);
+          setActiveChatThreadId(null);
+        }}
         currentUser={currentUser}
         initialThreadId={activeChatThreadId}
         onOpenUserProfile={handleOpenUserProfile}
         threads={chatThreads}
         onSendMessage={handleSendMessage}
+        onSelectThread={(threadId) => setActiveChatThreadId(threadId)}
       />
 
       <PublicProfileModal
@@ -563,22 +734,48 @@ export default function App() {
         onOpenChatWithUser={(user) => handleOpenChatWithSeller(user.name)}
       />
 
+      <StudentSurveyModal
+        isOpen={isStudentSurveyModalOpen}
+        onClose={() => {
+          setIsStudentSurveyModalOpen(false);
+          setSurveys(getStoredSurveys());
+          if (currentUser?.id) {
+            setAnsweredSurveyIds(getUserAnsweredSurveyIds(currentUser.id));
+          }
+        }}
+        currentUser={currentUser}
+        activeSurveys={surveys}
+        answeredSurveyIds={answeredSurveyIds}
+        onSurveyCompleted={(surveyId) => {
+          setCurrentUser((prev) => ({
+            ...prev,
+            ecoPoints: prev.ecoPoints + 25,
+          }));
+          setSurveys(getStoredSurveys());
+          if (currentUser?.id) {
+            setAnsweredSurveyIds(getUserAnsweredSurveyIds(currentUser.id));
+          }
+          showAppToast('Terima kasih! Jawaban survei Anda berhasil disimpan (+25 Eco-Points).');
+        }}
+      />
+
+      <RoleApplicationModal
+        isOpen={isRoleApplicationModalOpen}
+        onClose={() => setIsRoleApplicationModalOpen(false)}
+        currentUser={currentUser}
+        onSubmitSuccess={() => {
+          showAppToast('Pengajuan perubahan peran Anda telah dikirim dan menunggu verifikasi Admin.');
+        }}
+      />
+
       <RoleSwitchModal
         isOpen={isRoleModalOpen}
         onClose={() => setIsRoleModalOpen(false)}
         currentUser={currentUser}
         onSelectUser={(user) => {
-          setCurrentUser(user);
-          setIsLoggedIn(true);
+          handleLogin(user);
           showAppToast(`Beralih ke akun ${user.name} (${user.role})`);
         }}
-      />
-
-      <SusEvaluationModal
-        isOpen={isSusModalOpen}
-        onClose={() => setIsSusModalOpen(false)}
-        onSaveScore={(newScore) => setSusScore(newScore)}
-        currentScore={susScore}
       />
 
       <PickupRequestModal

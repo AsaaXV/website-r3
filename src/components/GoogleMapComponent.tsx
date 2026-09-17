@@ -162,8 +162,8 @@ export const GoogleMapComponent: React.FC<GoogleMapComponentProps> = ({
     );
   }
 
-  // Default coordinate: Kampus Universitas Hasanuddin Tamalanrea, Makassar
-  const defaultCenter = { lat: -5.1328, lng: 119.4932 };
+  // Default coordinate: Kampus Universitas Negeri Makassar (UNM Gunungsari & Parangtambung)
+  const defaultCenter = { lat: -5.1764, lng: 119.4320 };
 
   return (
     <div className="w-full h-full min-h-[460px] sm:min-h-[520px] relative rounded-2xl overflow-hidden shadow-inner">

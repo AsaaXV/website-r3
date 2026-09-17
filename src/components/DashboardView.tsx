@@ -26,8 +26,8 @@ interface DashboardViewProps {
   currentUser: UserProfile;
   transactions?: LedgerTransaction[];
   onNavigate?: (tab: string) => void;
-  onOpenSusModal?: () => void;
-  susScore?: number;
+  onOpenSurveyModal?: () => void;
+  activeSurveysCount?: number;
   onNavigateToScanner?: () => void;
   onNavigateToGamification?: () => void;
   onNavigateToEducation?: () => void;
@@ -37,8 +37,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   currentUser,
   transactions = [],
   onNavigate,
-  onOpenSusModal,
-  susScore = 88.5,
+  onOpenSurveyModal,
+  activeSurveysCount = 0,
   onNavigateToScanner,
   onNavigateToGamification,
   onNavigateToEducation,
@@ -60,7 +60,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const userWaterSaved = Math.round(userWeight * 45);
   const userTreesEquiv = (userWeight * 0.08).toFixed(1);
   const landfillDiversionRate = 88.4; // %
-  const currentSus = typeof susScore === 'number' && !isNaN(susScore) ? susScore : 88.5;
 
   return (
     <div className="space-y-8 pb-12">
@@ -199,7 +198,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div>
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-xs sm:text-sm font-bold text-slate-900">
-                Lokasi Anda: {currentUser?.faculty || 'Fakultas Teknik'} (Kampus Tamalanrea)
+                Lokasi Anda: {currentUser?.faculty || 'Fakultas Teknik'} (Kampus Parangtambung UNM)
               </span>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                 GPS Aktif
@@ -587,49 +586,61 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
         </div>
 
-        {/* System Usability Scale (SUS) Widget */}
-        <div className="bg-gradient-to-br from-indigo-50 via-white to-slate-50 rounded-2xl p-5 sm:p-6 border border-indigo-100 shadow-xs flex flex-col justify-between">
+        {/* Survei Riset Kampus Widget */}
+        <div className="bg-gradient-to-br from-emerald-50 via-white to-slate-50 rounded-2xl p-5 sm:p-6 border border-emerald-100 shadow-xs flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <BookOpen className="w-4 h-4 text-indigo-600" />
-              <span className="text-xs font-bold text-indigo-900 uppercase tracking-wider">
-                Human-Centered Design
+              <BookOpen className="w-4 h-4 text-emerald-600" />
+              <span className="text-xs font-bold text-emerald-900 uppercase tracking-wider">
+                Alat Riset & Partisipasi
               </span>
             </div>
 
             <h3 className="font-bold text-slate-900 text-base mb-1">
-              Metrik System Usability Scale (SUS)
+              Survei Sirkularitas Kampus
             </h3>
             <p className="text-xs text-slate-600 leading-relaxed mb-4">
-              Pengujian ergonomi kognitif menggunakan 10 instrumen skala Likert John Brooke untuk meminimalkan beban mental (cognitive load) civitas akademika.
+              Suara Anda menentukan arah inisiatif pengurangan sampah di UNM. Bantu tim riset merumuskan kebijakan sirkularitas berbasis data nyata.
             </p>
 
-            <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-2xs mb-4">
+            <div className="bg-white p-4 rounded-xl border border-emerald-100 shadow-2xs mb-4">
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-slate-600">Skor SUS Terkini</span>
-                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                  {currentSus >= 80 ? 'Best Imaginable' : currentSus >= 68 ? 'Good' : 'Marginal'}
+                <span className="text-xs font-semibold text-slate-600">Status Survei</span>
+                <span
+                  className={`text-xs font-bold px-2 py-0.5 rounded border ${
+                    activeSurveysCount > 0
+                      ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
+                      : 'text-slate-600 bg-slate-50 border-slate-200'
+                  }`}
+                >
+                  {activeSurveysCount > 0 ? `${activeSurveysCount} Tersedia` : 'Selesai'}
                 </span>
               </div>
-              <div className="text-3xl font-black text-indigo-900">
-                {currentSus.toFixed(1)} <span className="text-xs font-normal text-slate-500">/ 100</span>
+              <div className="text-2xl font-black text-slate-900">
+                {activeSurveysCount > 0 ? 'Survei Tersedia' : 'Tidak Ada Survei Aktif'}
               </div>
               <p className="text-[11px] text-slate-500 mt-1">
-                Melebihi standar baseline industri (68.0) dengan grade A+.
+                {activeSurveysCount > 0
+                  ? 'Kuesioner penelitian baru siap diisi dengan reward poin apresiasi.'
+                  : 'Terima kasih telah berpartisipasi dalam semua survei aktif.'}
               </p>
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              if (onOpenSusModal) onOpenSusModal();
-            }}
-            id="open-sus-test-card-btn"
-            className="w-full py-2.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <span>Isi Evaluasi Kuesioner SUS</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </button>
+          {activeSurveysCount > 0 && onOpenSurveyModal ? (
+            <button
+              onClick={onOpenSurveyModal}
+              id="open-survey-test-card-btn"
+              className="w-full py-2.5 px-4 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>Isi Survei Sekarang</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          ) : (
+            <div className="w-full py-2.5 px-4 rounded-xl bg-slate-100 text-slate-500 font-semibold text-xs text-center">
+              Tidak ada survei aktif saat ini
+            </div>
+          )}
         </div>
       </div>
     </div>

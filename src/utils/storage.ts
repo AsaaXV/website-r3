@@ -1,5 +1,24 @@
-import { ReuseItem, ItemRequest, ScanHistoryItem, DailyChallenge, UserProfile } from '../types';
-import { REUSE_ITEMS, INITIAL_USER } from '../data/mockData';
+import {
+  ReuseItem,
+  ItemRequest,
+  ScanHistoryItem,
+  DailyChallenge,
+  UserProfile,
+  ChatThread,
+  ChatMessage,
+  AppNotification,
+  UserCertificate,
+  PickupRequest,
+} from '../types';
+import {
+  REUSE_ITEMS,
+  INITIAL_USER,
+  OPERATOR_USER,
+  ADMIN_USER,
+  INITIAL_CHAT_THREADS,
+  DEMO_ACCOUNTS,
+} from '../data/mockData';
+import { DEV_ACCOUNT_PROFILE } from './authAccounts';
 
 const STORAGE_KEYS = {
   REUSE_ITEMS: 'ecocampus_reuse_items_v2',
@@ -7,17 +26,23 @@ const STORAGE_KEYS = {
   SCAN_HISTORY: 'ecocampus_scan_history_v2',
   CHALLENGES: 'ecocampus_daily_challenges_v2',
   USER_PROFILE: 'ecocampus_user_profile_v2',
+  CHAT_THREADS_PREFIX: 'ecocampus_chat_threads_v4_',
 };
+
+export function sanitizeUserId(userId?: string): string {
+  if (!userId) return 'guest';
+  return userId.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+}
 
 // Safe COD Spots standard recommendations
 export const SAFE_COD_SPOTS = [
-  'Lobi Utama Gedung Fakultas Teknik (Gedung Sipil & Elektro)',
-  'Perpustakaan Pusat Kampus (Area Diskusi Lt. 1)',
-  'Pusat Jajanan & Kantin Ramsis Kampus',
-  'Halte Bus Damri Kampus Pintu 1',
-  'Lobi Rektorat & Gedung PKM Kampus',
-  'Pos Security Pintu 2 Kampus',
-  'Taman Danau Lingkungan Unhas',
+  'Pelataran Menara Pinisi UNM (Jl. A.P. Pettarani)',
+  'Lobi Dekanat & Gedung Elektro FT UNM (Parangtambung)',
+  'Perpustakaan Pusat UNM Kampus Gunungsari',
+  'Pusat Kegiatan Mahasiswa (PKM) & Asrama UNM Parangtambung',
+  'Gedung Olahraga FIKK UNM Banta-Bantaeng',
+  'Gedung Kesenian & Desain FSD UNM Kampus Tidung',
+  'Taman Kampus Hijau Parangtambung UNM',
 ];
 
 export const INITIAL_ITEM_REQUESTS: ItemRequest[] = [
@@ -26,12 +51,17 @@ export const INITIAL_ITEM_REQUESTS: ItemRequest[] = [
     userId: 'usr_fatur_01',
     userName: 'Muh. Fatur Rahman',
     userEmail: 'fatur@gmail.com',
+    userFaculty: 'Fakultas Teknik',
+    requesterName: 'Muh. Fatur Rahman',
+    requesterFaculty: 'Fakultas Teknik',
     title: 'Dicari: Kardus Bekas Ukuran Sedang untuk Pindahan Kos',
     description: 'Halo rekan-rekan, butuh 4-5 kardus mi instan/air mineral bekas yang masih kokoh untuk beres-beres kosan akhir semester. Siap ambil di sekitar kampus.',
     category: 'Peralatan Kos',
     urgency: 'Segera',
     preferredCodSpot: 'Lobi Utama Gedung Fakultas Teknik',
+    preferredMeetupPoint: 'Lobi Utama Gedung Fakultas Teknik',
     createdAt: '2 jam yang lalu',
+    postedAt: '2 jam yang lalu',
     responsesCount: 2,
     status: 'open',
     contactWhatsapp: '081234567890',
@@ -41,12 +71,17 @@ export const INITIAL_ITEM_REQUESTS: ItemRequest[] = [
     userId: 'usr_nurul_02',
     userName: 'Nurul Hidayah',
     userEmail: 'nurul@gmail.com',
+    userFaculty: 'Fakultas MIPA',
+    requesterName: 'Nurul Hidayah',
+    requesterFaculty: 'Fakultas MIPA',
     title: 'Dicari: Buku Ajar Kalkulus & Fisika Dasar Preloved',
     description: 'Mencari buku ajar bekas mata kuliah kalkulus atau fisika teknik semester 1-2. Yang edisi lama tidak apa-apa asal halaman masih lengkap.',
     category: 'Buku & Diktat',
     urgency: 'Santai',
     preferredCodSpot: 'Perpustakaan Pusat Kampus (Area Diskusi Lt. 1)',
+    preferredMeetupPoint: 'Perpustakaan Pusat Kampus (Area Diskusi Lt. 1)',
     createdAt: 'Kemarin',
+    postedAt: 'Kemarin',
     responsesCount: 4,
     status: 'open',
     contactWhatsapp: '082198765432',
@@ -56,14 +91,20 @@ export const INITIAL_ITEM_REQUESTS: ItemRequest[] = [
     userId: 'usr_ahmad_03',
     userName: 'Ahmad Fauzi',
     userEmail: 'ahmad@gmail.com',
+    userFaculty: 'Fakultas Ekonomi & Bisnis',
+    requesterName: 'Ahmad Fauzi',
+    requesterFaculty: 'Fakultas Ekonomi & Bisnis',
     title: 'Dicari: Stopkontak / Kabel Roll Bekas Kosan',
     description: 'Butuh kabel roll 3-4 lubang yang masih berfungsi normal dengan aman. Boleh barter dengan tumbler atau buku novel santai.',
     category: 'Elektronik & Kos',
     urgency: 'Fleksibel',
     preferredCodSpot: 'Pusat Jajanan & Kantin Ramsis Kampus',
+    preferredMeetupPoint: 'Pusat Jajanan & Kantin Ramsis Kampus',
     createdAt: '2 hari yang lalu',
+    postedAt: '2 hari yang lalu',
     responsesCount: 1,
     status: 'open',
+    contactWhatsapp: '081398761234',
   },
 ];
 
@@ -226,7 +267,30 @@ export function saveStoredReuseItems(items: ReuseItem[]): void {
 export function getStoredItemRequests(): ItemRequest[] {
   try {
     const data = localStorage.getItem(STORAGE_KEYS.ITEM_REQUESTS);
-    if (data) return JSON.parse(data);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((item: any, idx: number) => ({
+          ...item,
+          id: item.id || `req_stored_${idx}`,
+          title: item.title || 'Barang Kebutuhan',
+          description: item.description || '',
+          category: item.category || 'Peralatan Kos',
+          urgency: item.urgency || 'Santai',
+          status: item.status || 'open',
+          requesterName: item.requesterName || item.userName || 'Rekan Mahasiswa',
+          userName: item.userName || item.requesterName || 'Rekan Mahasiswa',
+          requesterFaculty: item.requesterFaculty || item.userFaculty || 'Fakultas Teknik',
+          userFaculty: item.userFaculty || item.requesterFaculty || 'Fakultas Teknik',
+          preferredMeetupPoint: item.preferredMeetupPoint || item.preferredCodSpot || 'Lobi Utama Kampus',
+          preferredCodSpot: item.preferredCodSpot || item.preferredMeetupPoint || 'Lobi Utama Kampus',
+          postedAt: item.postedAt || item.createdAt || 'Baru saja',
+          createdAt: item.createdAt || item.postedAt || 'Baru saja',
+          contactWhatsapp: item.contactWhatsapp || '081234567890',
+          responsesCount: typeof item.responsesCount === 'number' ? item.responsesCount : 0,
+        }));
+      }
+    }
   } catch (e) {
     console.error(e);
   }
@@ -241,56 +305,853 @@ export function saveStoredItemRequests(requests: ItemRequest[]): void {
   }
 }
 
-export function getStoredScanHistory(): ScanHistoryItem[] {
+// =============================================================
+// USER-SCOPED DATA STORAGE (STRICT ISOLATION BY userId)
+// =============================================================
+
+export function getUserProfile(userId: string, fallback?: UserProfile): UserProfile {
+  if (!userId) return fallback || INITIAL_USER;
+  const sanitized = sanitizeUserId(userId);
   try {
-    const data = localStorage.getItem(STORAGE_KEYS.SCAN_HISTORY);
-    if (data) return JSON.parse(data);
+    const data = localStorage.getItem(`ecocampus_user_profile_${sanitized}`);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (parsed && parsed.id) return parsed;
+    }
   } catch (e) {
-    console.error(e);
+    console.error('Error reading user profile for', userId, e);
   }
-  return INITIAL_SCAN_HISTORY;
+
+  // Pre-configured baseline accounts if never saved yet
+  if (sanitized === 'usr_fatur_01' || sanitized === 'usr_demo_01') {
+    return INITIAL_USER;
+  }
+  if (sanitized === 'usr_operator_01') {
+    return OPERATOR_USER;
+  }
+  if (sanitized === 'usr_admin_01') {
+    return ADMIN_USER;
+  }
+  if (sanitized === 'usr_admin_dev_01') {
+    return DEV_ACCOUNT_PROFILE;
+  }
+  const matchedDemo = DEMO_ACCOUNTS.find((a) => a.id === userId || a.id === sanitized);
+  if (matchedDemo) {
+    return matchedDemo;
+  }
+
+  return fallback || {
+    id: userId,
+    name: 'Sivitas Akademika UNM',
+    email: `${sanitized}@student.unm.ac.id`,
+    faculty: 'Universitas Negeri Makassar',
+    major: 'Mahasiswa Aktif',
+    role: 'mahasiswa',
+    ecoPoints: 0,
+    xp: 0,
+    level: 1,
+    currentStreakDays: 0,
+    totalWeightDepositedKg: 0,
+    avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80',
+    badges: [],
+  };
 }
 
-export function saveStoredScanHistory(history: ScanHistoryItem[]): void {
+export function saveUserProfile(userId: string, profile: UserProfile): void {
+  if (!userId) return;
+  const sanitized = sanitizeUserId(userId);
   try {
-    localStorage.setItem(STORAGE_KEYS.SCAN_HISTORY, JSON.stringify(history));
+    localStorage.setItem(`ecocampus_user_profile_${sanitized}`, JSON.stringify(profile));
+    // Also update active session profile if this user is currently active
+    const activeUser = localStorage.getItem('ecocampus_active_user_id');
+    if (activeUser === userId || activeUser === sanitized) {
+      localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
+    }
+  } catch (e) {
+    console.error('Error saving user profile for', userId, e);
+  }
+}
+
+// --- 7-Day Challenges (Isolated per user) ---
+
+export function getUserChallenges(userId: string): DailyChallenge[] {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_challenges_${sanitized}`;
+  try {
+    const data = localStorage.getItem(key);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error('Error reading challenges for', userId, e);
+  }
+
+  // Fatur has Day 1 & Day 2 completed baseline
+  if (sanitized === 'usr_fatur_01' || sanitized === 'usr_demo_01') {
+    saveUserChallenges(userId, INITIAL_DAILY_CHALLENGES);
+    return INITIAL_DAILY_CHALLENGES;
+  }
+
+  // Nurul has Day 1 completed baseline
+  if (sanitized === 'usr_nurul_02') {
+    const nurulChallenges = INITIAL_DAILY_CHALLENGES.map((c) => ({
+      ...c,
+      completed: c.day === 1,
+      completedAt: c.day === 1 ? '10 Sep 2026' : undefined,
+    }));
+    saveUserChallenges(userId, nurulChallenges);
+    return nurulChallenges;
+  }
+
+  // Ahmad has Day 1 completed baseline
+  if (sanitized === 'usr_ahmad_03') {
+    const ahmadChallenges = INITIAL_DAILY_CHALLENGES.map((c) => ({
+      ...c,
+      completed: c.day === 1,
+      completedAt: c.day === 1 ? '09 Sep 2026' : undefined,
+    }));
+    saveUserChallenges(userId, ahmadChallenges);
+    return ahmadChallenges;
+  }
+
+  // Any other user (Operator, Admin, fresh user): FRESH challenges, 0/7 completed!
+  const freshChallenges: DailyChallenge[] = INITIAL_DAILY_CHALLENGES.map((c) => ({
+    ...c,
+    completed: false,
+    completedAt: undefined,
+  }));
+  saveUserChallenges(userId, freshChallenges);
+  return freshChallenges;
+}
+
+export function saveUserChallenges(userId: string, challenges: DailyChallenge[]): void {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_challenges_${sanitized}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(challenges));
+  } catch (e) {
+    console.error('Error saving challenges for', userId, e);
+  }
+}
+
+// --- Scan AI History (Isolated per user) ---
+
+export function getUserScanHistory(userId: string): ScanHistoryItem[] {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_scan_history_${sanitized}`;
+  try {
+    const data = localStorage.getItem(key);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Error reading scan history for', userId, e);
+  }
+
+  // Only Fatur starts with baseline 2 demo scans
+  if (sanitized === 'usr_fatur_01' || sanitized === 'usr_demo_01') {
+    saveUserScanHistory(userId, INITIAL_SCAN_HISTORY);
+    return INITIAL_SCAN_HISTORY;
+  }
+
+  // All other users start with EMPTY scan history (no data leakage)
+  return [];
+}
+
+export function saveUserScanHistory(userId: string, history: ScanHistoryItem[]): void {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_scan_history_${sanitized}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(history));
+  } catch (e) {
+    console.error('Error saving scan history for', userId, e);
+  }
+}
+
+export function clearUserScanHistory(userId: string): void {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_scan_history_${sanitized}`;
+  try {
+    localStorage.setItem(key, JSON.stringify([]));
+  } catch (e) {
+    console.error('Error clearing scan history for', userId, e);
+  }
+}
+
+// --- Official Certificates (Isolated per user) ---
+
+export function getUserCertificate(userId: string, profile: UserProfile): UserCertificate {
+  const sanitized = sanitizeUserId(userId);
+  const certKey = `ecocampus_certificate_${sanitized}`;
+  try {
+    const saved = localStorage.getItem(certKey);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.certificateNumber) return parsed;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  const shortCode = (sanitized || 'USR').replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase();
+  const cert: UserCertificate = {
+    certificateNumber: `UNM-EC3R-${shortCode}-2026`,
+    userId: profile.id || userId,
+    recipientName: profile.name || 'Sivitas Akademika UNM',
+    faculty: profile.faculty || 'Universitas Negeri Makassar',
+    major: profile.major || 'Program Kampus Hijau Parangtambung',
+    issueDate: profile.lastDepositDate || '11 September 2026',
+    totalWeightKg: profile.totalWeightDepositedKg || 0,
+    ecoPoints: profile.ecoPoints || 0,
+    level: profile.level || 1,
+    verificationHash: `SHA256-UNM-${shortCode}-${(profile.ecoPoints || 0) * 13 + 7041}`,
+    verificationUrl: `https://ecocampus.unm.ac.id/verify/${sanitized}`,
+  };
+
+  saveUserCertificate(userId, cert);
+  return cert;
+}
+
+export function saveUserCertificate(userId: string, cert: UserCertificate): void {
+  const sanitized = sanitizeUserId(userId);
+  const certKey = `ecocampus_certificate_${sanitized}`;
+  try {
+    localStorage.setItem(certKey, JSON.stringify(cert));
   } catch (e) {
     console.error(e);
   }
 }
 
-export function getStoredChallenges(): DailyChallenge[] {
+// --- User Wishlist & Cart (Isolated per user) ---
+
+export function getUserWishlist(userId: string): string[] {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_wishlist_${sanitized}`;
   try {
-    const data = localStorage.getItem(STORAGE_KEYS.CHALLENGES);
-    if (data) return JSON.parse(data);
+    const data = localStorage.getItem(key);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
   } catch (e) {
     console.error(e);
   }
-  return INITIAL_DAILY_CHALLENGES;
+  if (sanitized === 'usr_fatur_01' || sanitized === 'usr_demo_01') {
+    const initial = ['reuse_01', 'reuse_05'];
+    saveUserWishlist(userId, initial);
+    return initial;
+  }
+  return [];
 }
 
-export function saveStoredChallenges(challenges: DailyChallenge[]): void {
+export function saveUserWishlist(userId: string, wishlist: string[]): void {
+  const sanitized = sanitizeUserId(userId);
   try {
-    localStorage.setItem(STORAGE_KEYS.CHALLENGES, JSON.stringify(challenges));
+    localStorage.setItem(`ecocampus_wishlist_${sanitized}`, JSON.stringify(wishlist));
   } catch (e) {
     console.error(e);
   }
 }
 
-export function getStoredUser(): UserProfile {
+export function getUserCart(userId: string): string[] {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_cart_${sanitized}`;
   try {
-    const data = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-    if (data) return JSON.parse(data);
+    const data = localStorage.getItem(key);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
   } catch (e) {
     console.error(e);
   }
-  return INITIAL_USER;
+  if (sanitized === 'usr_fatur_01' || sanitized === 'usr_demo_01') {
+    const initial = ['reuse_02', 'reuse_04'];
+    saveUserCart(userId, initial);
+    return initial;
+  }
+  return [];
+}
+
+export function saveUserCart(userId: string, cart: string[]): void {
+  const sanitized = sanitizeUserId(userId);
+  try {
+    localStorage.setItem(`ecocampus_cart_${sanitized}`, JSON.stringify(cart));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// --- Forum Likes (Isolated per user) ---
+
+export function getUserForumLikes(userId: string): string[] {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_forum_likes_${sanitized}`;
+  try {
+    const data = localStorage.getItem(key);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  if (sanitized === 'usr_fatur_01' || sanitized === 'usr_demo_01') {
+    const initial = ['post_02'];
+    saveUserForumLikes(userId, initial);
+    return initial;
+  }
+  return [];
+}
+
+export function saveUserForumLikes(userId: string, likes: string[]): void {
+  const sanitized = sanitizeUserId(userId);
+  try {
+    localStorage.setItem(`ecocampus_forum_likes_${sanitized}`, JSON.stringify(likes));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// --- User Notifications (Isolated per user) ---
+
+export function getUserNotifications(userId: string, profile?: UserProfile): AppNotification[] {
+  const sanitized = sanitizeUserId(userId);
+  const notifKey = `ecocampus_notifications_${sanitized}`;
+  try {
+    const data = localStorage.getItem(notifKey);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+
+  let initial: AppNotification[] = [];
+  if (sanitized === 'usr_fatur_01' || sanitized === 'usr_demo_01') {
+    initial = [
+      {
+        id: 'notif_f1',
+        userId: sanitized,
+        title: 'Selamat Datang di EcoCampus UNM',
+        message: 'Akun mahasiswa aktif Anda terhubung dengan program Green Metric UNM 2026.',
+        timestamp: '12 Sep 2026, 08:00 WITA',
+        type: 'system',
+        read: true,
+        linkTab: 'dashboard',
+      },
+      {
+        id: 'notif_f2',
+        userId: sanitized,
+        title: 'Poin Setoran +255 Pts Terverifikasi',
+        message: 'Setoran botol plastik 5.5 kg di Drop Point FT UNM Parangtambung telah divalidasi oleh petugas.',
+        timestamp: '12 Sep 2026, 09:30 WITA',
+        type: 'deposit',
+        read: true,
+        linkTab: 'dashboard',
+      },
+      {
+        id: 'notif_f3',
+        userId: sanitized,
+        title: 'Tantangan Hari ke-2 Selesai!',
+        message: 'Selamat! Anda memperoleh 50 Eco-Points & 100 XP karena membawa tumbler ramah lingkungan di kampus.',
+        timestamp: '12 Sep 2026, 12:45 WITA',
+        type: 'challenge',
+        read: false,
+        linkTab: 'gamifikasi',
+      },
+    ];
+  } else if (sanitized === 'usr_operator_01') {
+    initial = [
+      {
+        id: 'notif_op1',
+        userId: sanitized,
+        title: 'Portal Petugas TPST Aktif',
+        message: 'Selamat bertugas di TPST Kampus Parangtambung UNM. Timbangan digital dan modul VRP armada siap digunakan.',
+        timestamp: 'Hari ini, 07:00 WITA',
+        type: 'system',
+        read: false,
+        linkTab: 'dashboard',
+      },
+      {
+        id: 'notif_op2',
+        userId: sanitized,
+        title: 'Permintaan Penjemputan Baru',
+        message: 'Ada permohonan penjemputan sampah anorganik terpilah di Gedung Dekanat FT UNM.',
+        timestamp: 'Hari ini, 09:15 WITA',
+        type: 'deposit',
+        read: false,
+        linkTab: 'dashboard',
+      },
+    ];
+  } else if (sanitized === 'usr_admin_01' || sanitized === 'usr_admin_dev_01') {
+    initial = [
+      {
+        id: 'notif_ad1',
+        userId: sanitized,
+        title: 'Dasbor Audit & Monitoring UNM',
+        message: 'Sistem audit sirkularitas kampus UNM aktif. Ringkasan emisi karbon dan buku besar dapat diunduh.',
+        timestamp: 'Hari ini, 08:00 WITA',
+        type: 'system',
+        read: false,
+        linkTab: 'dashboard',
+      },
+    ];
+  } else {
+    initial = [
+      {
+        id: `notif_gen_${Date.now()}`,
+        userId: sanitized,
+        title: 'Selamat Bergabung di EcoCampus UNM! 🌱',
+        message: `Halo ${profile?.name || 'Sivitas Akademika'}! Mulai pilah sampah kos atau jual/hibahkan barang bekas di Bursa Reuse UNM.`,
+        timestamp: 'Baru saja',
+        type: 'system',
+        read: false,
+        linkTab: 'dashboard',
+      },
+    ];
+  }
+
+  saveUserNotifications(userId, initial);
+  return initial;
+}
+
+export function saveUserNotifications(userId: string, notifications: AppNotification[]): void {
+  const sanitized = sanitizeUserId(userId);
+  try {
+    localStorage.setItem(`ecocampus_notifications_${sanitized}`, JSON.stringify(notifications));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+export function markNotificationAsRead(userId: string, notifId: string): void {
+  const current = getUserNotifications(userId);
+  const updated = current.map((n) => (n.id === notifId ? { ...n, read: true } : n));
+  saveUserNotifications(userId, updated);
+}
+
+export function markAllNotificationsAsRead(userId: string): void {
+  const current = getUserNotifications(userId);
+  const updated = current.map((n) => ({ ...n, read: true }));
+  saveUserNotifications(userId, updated);
+}
+
+// --- User Pickup Requests (Isolated per user) ---
+
+export function getUserPickupRequests(userId: string): PickupRequest[] {
+  const sanitized = sanitizeUserId(userId);
+  const key = `ecocampus_pickup_requests_${sanitized}`;
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  // Default for Fatur: 1 sample scheduled request
+  if (sanitized === 'usr_fatur_01' || sanitized === 'usr_demo_01') {
+    const initial: PickupRequest[] = [
+      {
+        id: 'req_pickup_01',
+        userId: sanitized,
+        userName: 'Muh. Fatur Rahman',
+        facultyLocation: 'Fakultas Teknik',
+        exactAddress: 'Lobi Gedung Elektro & Komputer FT UNM Parangtambung',
+        wasteTypes: ['plastik', 'kertas'],
+        estimatedWeightKg: 6.5,
+        contactWhatsapp: '081244556677',
+        notes: 'Kardus tugas kuliah dan botol PET sudah dipisah dalam 2 karung rapi.',
+        status: 'scheduled',
+        createdAt: '12 Sep 2026, 09:00 WITA',
+      },
+    ];
+    saveUserPickupRequests(userId, initial);
+    return initial;
+  }
+  return [];
+}
+
+export function saveUserPickupRequests(userId: string, requests: PickupRequest[]): void {
+  const sanitized = sanitizeUserId(userId);
+  try {
+    localStorage.setItem(`ecocampus_pickup_requests_${sanitized}`, JSON.stringify(requests));
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+// --- Backward-compatible delegates (auto-scoped to active session) ---
+
+export function getStoredScanHistory(userId?: string): ScanHistoryItem[] {
+  if (userId) return getUserScanHistory(userId);
+  try {
+    const active = localStorage.getItem('ecocampus_active_user_id');
+    if (active) return getUserScanHistory(active);
+  } catch {}
+  return getUserScanHistory('usr_fatur_01');
+}
+
+export function saveStoredScanHistory(history: ScanHistoryItem[], userId?: string): void {
+  if (userId) return saveUserScanHistory(userId, history);
+  try {
+    const active = localStorage.getItem('ecocampus_active_user_id');
+    if (active) return saveUserScanHistory(active, history);
+  } catch {}
+  return saveUserScanHistory('usr_fatur_01', history);
+}
+
+export function getStoredChallenges(userId?: string): DailyChallenge[] {
+  if (userId) return getUserChallenges(userId);
+  try {
+    const active = localStorage.getItem('ecocampus_active_user_id');
+    if (active) return getUserChallenges(active);
+  } catch {}
+  return getUserChallenges('usr_fatur_01');
+}
+
+export function saveStoredChallenges(challenges: DailyChallenge[], userId?: string): void {
+  if (userId) return saveUserChallenges(userId, challenges);
+  try {
+    const active = localStorage.getItem('ecocampus_active_user_id');
+    if (active) return saveUserChallenges(active, challenges);
+  } catch {}
+  return saveUserChallenges('usr_fatur_01', challenges);
+}
+
+export function getStoredUser(userId?: string): UserProfile {
+  if (userId) return getUserProfile(userId);
+  try {
+    const active = localStorage.getItem('ecocampus_active_user_id');
+    if (active) return getUserProfile(active);
+    const saved = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed && parsed.id) return getUserProfile(parsed.id, parsed);
+    }
+  } catch {}
+  return getUserProfile('usr_fatur_01');
 }
 
 export function saveStoredUser(user: UserProfile): void {
+  if (user && user.id) {
+    saveUserProfile(user.id, user);
+  }
+}
+
+function getChatStorageKey(userId: string): string {
+  const sanitized = sanitizeUserId(userId);
+  return `${STORAGE_KEYS.CHAT_THREADS_PREFIX}${sanitized}`;
+}
+
+function getInitialThreadsForUser(userId: string, userName?: string): ChatThread[] {
+  // 1. Perspective: Fatur (usr_fatur_01 or demo)
+  if (userId === 'usr_fatur_01' || userId === 'usr_demo_01') {
+    return INITIAL_CHAT_THREADS;
+  }
+
+  // 2. Perspective: Ahmad Fauzi (usr_ahmad_03)
+  if (userId === 'usr_ahmad_03') {
+    return [
+      {
+        id: 'thread_ahmad_fatur',
+        participantId: 'usr_fatur_01',
+        participantName: 'Muh. Fatur Rahman',
+        participantAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80',
+        participantRole: 'Mahasiswa (Informatika 22)',
+        participantFaculty: 'Fakultas Teknik',
+        onlineStatus: 'online',
+        lastMessage: 'Halo bro! Buku kalkulusnya masih ada, besok bisa COD di Lobi FT jam istirahat ya.',
+        lastTimestamp: '10:15 WITA',
+        unreadCount: 0,
+        itemContext: {
+          id: 'reuse_01',
+          title: 'Buku Kalkulus Stewart Edisi 8',
+          imageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80',
+          price: 'GRATIS (Hibah)',
+        },
+        messages: [
+          {
+            id: 'msg_af_1',
+            senderId: 'usr_fatur_01',
+            senderName: 'Muh. Fatur Rahman',
+            recipientId: 'usr_ahmad_03',
+            recipientName: 'Ahmad Fauzi',
+            text: 'Halo kak Ahmad, saya mahasiswa Informatika angkatan 22. Buku kalkulus Stewart edisi 8 yang dihibahkan masih ada?',
+            timestamp: '09:40 WITA',
+            isSelf: false,
+            itemTitle: 'Buku Kalkulus Stewart Edisi 8',
+          },
+          {
+            id: 'msg_af_2',
+            senderId: 'usr_ahmad_03',
+            senderName: 'Ahmad Fauzi',
+            recipientId: 'usr_fatur_01',
+            recipientName: 'Muh. Fatur Rahman',
+            text: 'Halo bro! Buku kalkulusnya masih ada, besok bisa COD di Lobi FT jam istirahat ya.',
+            timestamp: '10:15 WITA',
+            isSelf: true,
+          },
+        ],
+      },
+    ];
+  }
+
+  // 3. Perspective: Operator TPST (usr_operator_01)
+  if (userId === 'usr_operator_01') {
+    return [
+      {
+        id: 'thread_operator_fatur',
+        participantId: 'usr_fatur_01',
+        participantName: 'Muh. Fatur Rahman',
+        participantAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80',
+        participantRole: 'Mahasiswa (Informatika 22)',
+        participantFaculty: 'Fakultas Teknik',
+        onlineStatus: 'online',
+        lastMessage: 'Setoran botol PET 4.2 kg Anda sudah terverifikasi di buku besar, poin 147 pts sudah masuk!',
+        lastTimestamp: 'Kemarin',
+        unreadCount: 0,
+        messages: [
+          {
+            id: 'msg_jf_1',
+            senderId: 'usr_fatur_01',
+            senderName: 'Muh. Fatur Rahman',
+            recipientId: 'usr_operator_01',
+            recipientName: 'Baharuddin S.Pd. (Petugas TPST)',
+            text: 'Pak Baharuddin, tadi saya titip kardus dan botol di drop box lobi FT. Apakah sudah ditimbang?',
+            timestamp: 'Kemarin, 14:10 WITA',
+            isSelf: false,
+          },
+          {
+            id: 'msg_jf_2',
+            senderId: 'usr_operator_01',
+            senderName: 'Baharuddin S.Pd. (Petugas TPST)',
+            recipientId: 'usr_fatur_01',
+            recipientName: 'Muh. Fatur Rahman',
+            text: 'Setoran botol PET 4.2 kg Anda sudah terverifikasi di buku besar, poin 147 pts sudah masuk!',
+            timestamp: 'Kemarin, 15:30 WITA',
+            isSelf: true,
+          },
+        ],
+      },
+    ];
+  }
+
+  // 4. Perspective: Nurul Hidayah (usr_nurul_02)
+  if (userId === 'usr_nurul_02') {
+    return [
+      {
+        id: 'thread_nurul_fatur',
+        participantId: 'usr_fatur_01',
+        participantName: 'Muh. Fatur Rahman',
+        participantAvatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=250&q=80',
+        participantRole: 'Mahasiswa (Informatika 22)',
+        participantFaculty: 'Fakultas Teknik',
+        onlineStatus: 'online',
+        lastMessage: 'Bisa kak, kalau mau bayar pakai Eco-Points juga boleh langsung di sistem.',
+        lastTimestamp: '2 hari lalu',
+        unreadCount: 0,
+        itemContext: {
+          id: 'reuse_02',
+          title: 'Set Meja Gambar Portable A2',
+          imageUrl: 'https://images.unsplash.com/photo-1513542789411-b6a5d4f31634?auto=format&fit=crop&w=600&q=80',
+          price: 'Rp 45.000 / 50 Pts',
+        },
+        messages: [
+          {
+            id: 'msg_nf_1',
+            senderId: 'usr_fatur_01',
+            senderName: 'Muh. Fatur Rahman',
+            recipientId: 'usr_nurul_02',
+            recipientName: 'Nurul Hidayah',
+            text: 'Halo Nurul, meja gambarnya apakah penggaris T-nya masih lurus presisi?',
+            timestamp: '2 hari lalu',
+            isSelf: false,
+          },
+          {
+            id: 'msg_nf_2',
+            senderId: 'usr_nurul_02',
+            senderName: 'Nurul Hidayah',
+            recipientId: 'usr_fatur_01',
+            recipientName: 'Muh. Fatur Rahman',
+            text: 'Bisa kak, kalau mau bayar pakai Eco-Points juga boleh langsung di sistem.',
+            timestamp: '2 hari lalu',
+            isSelf: true,
+          },
+        ],
+      },
+    ];
+  }
+
+  // 5. Perspective: Admin Kampus (usr_admin_01 or usr_admin_dev_01)
+  if (userId === 'usr_admin_01' || userId === 'usr_admin_dev_01') {
+    return [
+      {
+        id: `thread_admin_tpst_${userId}`,
+        participantId: 'usr_operator_01',
+        participantName: 'Baharuddin S.Pd. (Petugas TPST)',
+        participantAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=250&q=80',
+        participantRole: 'Koordinator TPST Parangtambung',
+        participantFaculty: 'Unit Pengelolaan Lingkungan & Sarpras UNM',
+        onlineStatus: 'online',
+        lastMessage: 'Laporan timbangan mingguan sudah divalidasi ke buku besar UNM, Bu Dokter.',
+        lastTimestamp: 'Hari ini, 08:30 WITA',
+        unreadCount: 1,
+        messages: [
+          {
+            id: `msg_ad_1_${Date.now()}`,
+            senderId: 'usr_operator_01',
+            senderName: 'Baharuddin S.Pd. (Petugas TPST)',
+            recipientId: userId,
+            recipientName: userName || 'Admin Kampus UNM',
+            text: 'Selamat pagi Bu/Pak Pengelola, laporan akumulasi sampah anorganik terpilah minggu ini di Parangtambung dan Gunungsari telah sinkron dengan sistem audit.',
+            timestamp: 'Hari ini, 08:30 WITA',
+            isSelf: false,
+          },
+        ],
+      },
+    ];
+  }
+
+  // 6. Default fresh account: Official Welcoming conversation
+  return [
+    {
+      id: `thread_welcome_${userId}`,
+      participantId: 'usr_operator_01',
+      participantName: 'Baharuddin S.Pd. (Petugas TPST)',
+      participantAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=250&q=80',
+      participantRole: 'Koordinator TPST Parangtambung',
+      participantFaculty: 'Unit Pengelolaan Lingkungan & Sarpras UNM',
+      onlineStatus: 'online',
+      lastMessage: 'Selamat datang di EcoCampus UNM! Hubungi kami jika ingin janjian penjemputan sampah terpilah di kampus.',
+      lastTimestamp: 'Hari ini',
+      unreadCount: 1,
+      messages: [
+        {
+          id: `msg_welcome_${Date.now()}`,
+          senderId: 'usr_operator_01',
+          senderName: 'Baharuddin S.Pd. (Petugas TPST)',
+          recipientId: userId,
+          recipientName: userName || 'Sivitas Kampus',
+          text: `Halo ${userName || 'Rekan Kampus'}! Selamat datang di platform EcoCampus UNM. Jika Anda memerlukan koordinasi drop box sampah atau transaksi bursa reuse di lingkungan UNM, Anda bisa mengobrol langsung di sini. Salam lestari! 🌱`,
+          timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WITA',
+          isSelf: false,
+        },
+      ],
+    },
+  ];
+}
+
+/**
+ * Retrieve chat threads strictly isolated to the specified userId.
+ */
+export function getStoredUserChatThreads(userId: string, userName?: string): ChatThread[] {
+  if (!userId) return [];
   try {
-    localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(user));
+    const key = getChatStorageKey(userId);
+    const data = localStorage.getItem(key);
+    if (data) {
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    }
   } catch (e) {
-    console.error(e);
+    console.error('Error reading chat threads for user:', userId, e);
+  }
+
+  // Initialize and persist tailored initial threads
+  const initial = getInitialThreadsForUser(userId, userName);
+  saveStoredUserChatThreads(userId, initial);
+  return initial;
+}
+
+/**
+ * Persist chat threads strictly isolated to the specified userId.
+ */
+export function saveStoredUserChatThreads(userId: string, threads: ChatThread[]): void {
+  if (!userId) return;
+  try {
+    const key = getChatStorageKey(userId);
+    localStorage.setItem(key, JSON.stringify(threads));
+  } catch (e) {
+    console.error('Error saving chat threads for user:', userId, e);
+  }
+}
+
+/**
+ * Clear chat threads storage for a specific userId.
+ */
+export function clearStoredUserChatThreads(userId: string): void {
+  if (!userId) return;
+  try {
+    const key = getChatStorageKey(userId);
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.error('Error clearing chat threads for user:', userId, e);
+  }
+}
+
+/**
+ * Deliver a message across accounts to the recipient's isolated mailbox.
+ * This guarantees real P2P message delivery without global state leaks or auto-replies.
+ */
+export function deliverMessageToRecipient(
+  recipientId: string,
+  message: ChatMessage,
+  senderUser: UserProfile,
+  itemContext?: any
+): void {
+  if (!recipientId || recipientId === senderUser.id) return;
+  try {
+    const recipientThreads = getStoredUserChatThreads(recipientId);
+    let matchedThread = recipientThreads.find(
+      (t) => t.participantId === senderUser.id || t.participantName.toLowerCase() === senderUser.name.toLowerCase()
+    );
+
+    const receivedMessage: ChatMessage = {
+      ...message,
+      isSelf: false,
+    };
+
+    if (matchedThread) {
+      // Guard against duplicates
+      const isDuplicate = matchedThread.messages.some((m) => m.id === message.id);
+      if (!isDuplicate) {
+        matchedThread.messages.push(receivedMessage);
+        matchedThread.lastMessage = message.text;
+        matchedThread.lastTimestamp = message.timestamp || 'Baru saja';
+        matchedThread.unreadCount = (matchedThread.unreadCount || 0) + 1;
+        if (itemContext && !matchedThread.itemContext) {
+          matchedThread.itemContext = itemContext;
+        }
+      }
+    } else {
+      // Create new inbound thread for recipient
+      const newThread: ChatThread = {
+        id: `thread_inbound_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+        participantId: senderUser.id,
+        participantName: senderUser.name,
+        participantAvatar: senderUser.avatarUrl,
+        participantRole: senderUser.role === 'petugas_tps' ? 'Petugas TPST' : 'Mahasiswa',
+        participantFaculty: senderUser.faculty,
+        onlineStatus: 'online',
+        lastMessage: message.text,
+        lastTimestamp: message.timestamp || 'Baru saja',
+        unreadCount: 1,
+        itemContext,
+        messages: [receivedMessage],
+      };
+      recipientThreads.unshift(newThread);
+    }
+
+    saveStoredUserChatThreads(recipientId, recipientThreads);
+  } catch (e) {
+    console.error('Error delivering message to recipient mailbox:', e);
   }
 }

@@ -25,10 +25,11 @@ import {
   Compass
 } from 'lucide-react';
 import { PRESET_DETECTIONS, WASTE_CATEGORIES } from '../data/mockData';
-import { DetectionResult, WasteCategoryType, UpcyclingTip, ScanHistoryItem } from '../types';
-import { getStoredScanHistory, saveStoredScanHistory } from '../utils/storage';
+import { DetectionResult, WasteCategoryType, UpcyclingTip, ScanHistoryItem, UserProfile } from '../types';
+import { getUserScanHistory, saveUserScanHistory, clearUserScanHistory } from '../utils/storage';
 
 interface AIScannerViewProps {
+  currentUser?: UserProfile;
   onNavigateToEducation?: () => void;
   onNavigateToCommunity?: () => void;
   onNavigateToMap?: () => void;
@@ -150,6 +151,7 @@ const MATERIAL_UPCYCLING_GUIDES: Record<string, UpcyclingTip[]> = {
 };
 
 export const AIScannerView: React.FC<AIScannerViewProps> = ({
+  currentUser,
   onNavigateToEducation,
   onNavigateToCommunity,
   onNavigateToMap,
@@ -163,7 +165,14 @@ export const AIScannerView: React.FC<AIScannerViewProps> = ({
   const [customImage, setCustomImage] = useState<string | null>(null);
   const [detection, setDetection] = useState<DetectionResult>(PRESET_DETECTIONS[0].result);
   const [showUpcyclingTips, setShowUpcyclingTips] = useState<boolean>(true);
-  const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>(() => getStoredScanHistory());
+  const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>(() =>
+    getUserScanHistory(currentUser?.id || '')
+  );
+
+  // Sync scan history when active authenticated user changes
+  useEffect(() => {
+    setScanHistory(getUserScanHistory(currentUser?.id || ''));
+  }, [currentUser?.id]);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -213,7 +222,7 @@ export const AIScannerView: React.FC<AIScannerViewProps> = ({
         return prev;
       }
       const updated = [historyItem, ...prev.slice(0, 19)]; // Keep latest 20
-      saveStoredScanHistory(updated);
+      saveUserScanHistory(currentUser?.id || '', updated);
       return updated;
     });
   };
@@ -298,7 +307,7 @@ export const AIScannerView: React.FC<AIScannerViewProps> = ({
   const handleClearHistory = () => {
     if (confirm('Bersihkan seluruh riwayat pemindaian AI dari perangkat ini?')) {
       setScanHistory([]);
-      saveStoredScanHistory([]);
+      clearUserScanHistory(currentUser?.id || '');
     }
   };
 

@@ -32,7 +32,7 @@ import {
   REWARD_ITEMS
 } from '../data/mockData';
 import { UserProfile, RewardItem, DailyChallenge } from '../types';
-import { getStoredChallenges, saveStoredChallenges } from '../utils/storage';
+import { getUserChallenges, saveUserChallenges, getUserCertificate } from '../utils/storage';
 
 interface GamificationViewProps {
   currentUser: UserProfile;
@@ -51,8 +51,20 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
   const [redeemError, setRedeemError] = useState<string | null>(null);
   const [challengeToast, setChallengeToast] = useState<string | null>(null);
 
-  // Daily Micro-challenges state persisted in localStorage
-  const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>(() => getStoredChallenges());
+  // Daily Micro-challenges state strictly isolated per user session (currentUser.id)
+  const [dailyChallenges, setDailyChallenges] = useState<DailyChallenge[]>(() =>
+    getUserChallenges(currentUser?.id || '')
+  );
+
+  // Re-fetch challenges whenever active authenticated user changes
+  React.useEffect(() => {
+    setDailyChallenges(getUserChallenges(currentUser?.id || ''));
+  }, [currentUser?.id]);
+
+  // Certificate isolated per user
+  const userCertificate = React.useMemo(() => {
+    return getUserCertificate(currentUser?.id || '', currentUser);
+  }, [currentUser]);
 
   // Experience level threshold: Level * 400 XP
   const nextLevelXp = currentUser.level * 400;
@@ -85,7 +97,7 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
         : c
     );
     setDailyChallenges(updated);
-    saveStoredChallenges(updated);
+    saveUserChallenges(currentUser.id, updated);
 
     // Update user points and XP
     if (onUpdateUser) {
@@ -392,13 +404,13 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
                 </div>
 
                 <div className="text-xs uppercase tracking-widest text-amber-300 font-bold">
-                  UNIVERSITAS HASANUDDIN • ECO-CAMPUS 3R INITIATIVE
+                  UNIVERSITAS NEGERI MAKASSAR • ECO-CAMPUS 3R UNM INITIATIVE
                 </div>
                 <h1 className="text-xl sm:text-3xl font-black tracking-tight text-white uppercase font-serif">
                   Sertifikat Penghargaan Sirkular
                 </h1>
                 <p className="text-xs text-emerald-200/90 max-w-lg mx-auto">
-                  Diberikan sebagai pengakuan dedikasi nyata dalam pemilahan sampah di hulu kampus dan reduksi beban TPA Tamangapa Antang.
+                  Diberikan sebagai pengakuan dedikasi nyata dalam pemilahan sampah di lingkungan kampus UNM (Gunungsari & Parangtambung) dan ekonomi sirkular berkelanjutan.
                 </p>
               </div>
 
@@ -451,10 +463,10 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
                   </div>
                   <div className="text-[10px] text-slate-300 space-y-0.5">
                     <div className="font-mono font-bold text-white">
-                      ID: ECO-MAKASSAR-{currentUser.id.slice(-6).toUpperCase()}-2026
+                      ID: ECO-UNM-{currentUser.id.slice(-6).toUpperCase()}-2026
                     </div>
-                    <div>Diterbitkan di Kampus Tamalanrea</div>
-                    <div>Status: Resmi & Berlaku Global</div>
+                    <div>Diterbitkan di Universitas Negeri Makassar (UNM)</div>
+                    <div>Status: Resmi & Berlaku Kampus</div>
                   </div>
                 </div>
 

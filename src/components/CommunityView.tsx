@@ -53,6 +53,10 @@ import {
   saveStoredReuseItems,
   getStoredItemRequests,
   saveStoredItemRequests,
+  getUserWishlist,
+  saveUserWishlist,
+  getUserCart,
+  saveUserCart,
   SAFE_COD_SPOTS
 } from '../utils/storage';
 import confetti from 'canvas-confetti';
@@ -90,6 +94,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   const [isNewRequestModalOpen, setIsNewRequestModalOpen] = useState(false);
   const [requestSearchQuery, setRequestSearchQuery] = useState('');
   const [requestUrgencyFilter, setRequestUrgencyFilter] = useState<'all' | 'Segera' | 'Santai' | 'Fleksibel'>('all');
+  const [cancelingReqId, setCancelingReqId] = useState<string | null>(null);
 
   // New Request Form fields
   const [reqTitle, setReqTitle] = useState('');
@@ -108,12 +113,22 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   const [sortBy, setSortBy] = useState<'newest' | 'priceAsc' | 'priceDesc' | 'popular'>('newest');
   const [viewLayout, setViewLayout] = useState<'grid' | 'list'>('grid');
 
-  // Wishlist / Liked items
-  const [wishlistIds, setWishlistIds] = useState<string[]>(['reuse_01', 'reuse_05']);
+  // Wishlist / Liked items (strictly isolated per user)
+  const [wishlistIds, setWishlistIds] = useState<string[]>(() =>
+    getUserWishlist(currentUser?.id || '')
+  );
 
-  // Reuse Cart & COD Coordination Management
-  const [cartItemIds, setCartItemIds] = useState<string[]>(['reuse_02', 'reuse_04']);
+  // Reuse Cart & COD Coordination Management (strictly isolated per user)
+  const [cartItemIds, setCartItemIds] = useState<string[]>(() =>
+    getUserCart(currentUser?.id || '')
+  );
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
+
+  // Re-sync wishlist & cart when active user changes
+  React.useEffect(() => {
+    setWishlistIds(getUserWishlist(currentUser?.id || ''));
+    setCartItemIds(getUserCart(currentUser?.id || ''));
+  }, [currentUser?.id]);
 
   // Modals
   const [activeDetailItem, setActiveDetailItem] = useState<ReuseItem | null>(null);
@@ -155,13 +170,16 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     if (e) e.stopPropagation();
     setWishlistIds((prev) => {
       const isFav = prev.includes(id);
+      const updated = isFav ? prev.filter((item) => item !== id) : [...prev, id];
+      if (currentUser?.id) {
+        saveUserWishlist(currentUser.id, updated);
+      }
       if (isFav) {
         showToast('Iklan dihapus dari daftar favorit');
-        return prev.filter((item) => item !== id);
       } else {
         showToast('Iklan disimpan ke daftar favorit');
-        return [...prev, id];
       }
+      return updated;
     });
   };
 
@@ -171,22 +189,23 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
 
     // Search query
     if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+      const q = searchQuery.trim().toLowerCase();
       result = result.filter(
         (item) =>
-          item.title.toLowerCase().includes(q) ||
-          item.description.toLowerCase().includes(q) ||
-          item.donorName.toLowerCase().includes(q) ||
-          item.location.toLowerCase().includes(q) ||
-          item.category.toLowerCase().includes(q)
+          (item.title || '').toLowerCase().includes(q) ||
+          (item.description || '').toLowerCase().includes(q) ||
+          (item.donorName || '').toLowerCase().includes(q) ||
+          (item.location || '').toLowerCase().includes(q) ||
+          (item.category || '').toLowerCase().includes(q)
       );
     }
 
     // Location Filter
     if (selectedCampusLocation !== 'Semua Lokasi') {
+      const targetLoc = selectedCampusLocation.toLowerCase();
       result = result.filter((item) =>
-        item.location.toLowerCase().includes(selectedCampusLocation.toLowerCase()) ||
-        item.donorFaculty.toLowerCase().includes(selectedCampusLocation.toLowerCase())
+        (item.location || '').toLowerCase().includes(targetLoc) ||
+        (item.donorFaculty || '').toLowerCase().includes(targetLoc)
       );
     }
 
@@ -234,14 +253,23 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
   const filteredItemRequests = useMemo(() => {
     let list = [...itemRequests];
     if (requestSearchQuery.trim()) {
-      const q = requestSearchQuery.toLowerCase();
-      list = list.filter(
-        (r) =>
-          r.title.toLowerCase().includes(q) ||
-          r.description.toLowerCase().includes(q) ||
-          r.category.toLowerCase().includes(q) ||
-          r.requesterName.toLowerCase().includes(q)
-      );
+      const q = requestSearchQuery.trim().toLowerCase();
+      list = list.filter((r) => {
+        const title = (r.title || '').toLowerCase();
+        const desc = (r.description || '').toLowerCase();
+        const cat = (r.category || '').toLowerCase();
+        const name = (r.requesterName || r.userName || '').toLowerCase();
+        const faculty = (r.requesterFaculty || r.userFaculty || '').toLowerCase();
+        const spot = (r.preferredMeetupPoint || r.preferredCodSpot || '').toLowerCase();
+        return (
+          title.includes(q) ||
+          desc.includes(q) ||
+          cat.includes(q) ||
+          name.includes(q) ||
+          faculty.includes(q) ||
+          spot.includes(q)
+        );
+      });
     }
     if (requestUrgencyFilter !== 'all') {
       list = list.filter((r) => r.urgency === requestUrgencyFilter);
@@ -254,19 +282,28 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     if (e) e.stopPropagation();
     setCartItemIds((prev) => {
       const exists = prev.includes(itemId);
+      const updated = exists ? prev.filter((id) => id !== itemId) : [...prev, itemId];
+      if (currentUser?.id) {
+        saveUserCart(currentUser.id, updated);
+      }
       if (exists) {
         showToast('Barang dikeluarkan dari keranjang.');
-        return prev.filter((id) => id !== itemId);
       } else {
         showToast('Barang dimasukkan ke keranjang reuse!');
-        return [...prev, itemId];
       }
+      return updated;
     });
   };
 
   const removeFromCart = (itemId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setCartItemIds((prev) => prev.filter((id) => id !== itemId));
+    setCartItemIds((prev) => {
+      const updated = prev.filter((id) => id !== itemId);
+      if (currentUser?.id) {
+        saveUserCart(currentUser.id, updated);
+      }
+      return updated;
+    });
     showToast('Barang dihapus dari keranjang.');
   };
 
@@ -351,14 +388,71 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
     setReqDesc('');
   };
 
-  // Toggle Request Fulfilled status
+  // Helper untuk memverifikasi apakah pengguna saat ini adalah pemilik/pembuat postingan
+  const isPostCreator = (req: ItemRequest): boolean => {
+    if (!currentUser) return false;
+    const curId = (currentUser.id || '').trim().toLowerCase();
+    const curEmail = (currentUser.email || '').trim().toLowerCase();
+    const curName = (currentUser.name || '').trim().toLowerCase();
+
+    const reqUserId = (req.userId || '').trim().toLowerCase();
+    const reqEmail = (req.userEmail || '').trim().toLowerCase();
+    const reqUserName = (req.userName || '').trim().toLowerCase();
+    const reqRequester = (req.requesterName || '').trim().toLowerCase();
+
+    // 1. Cek kecocokan ID pengguna
+    if (curId && reqUserId && curId === reqUserId) return true;
+
+    // 2. Cek kecocokan Email
+    if (curEmail && reqEmail && curEmail === reqEmail) return true;
+
+    // 3. Cek kecocokan Nama
+    if (curName && reqUserName && (curName === reqUserName || curName.includes(reqUserName) || reqUserName.includes(curName))) return true;
+    if (curName && reqRequester && (curName === reqRequester || curName.includes(reqRequester) || reqRequester.includes(curName))) return true;
+
+    return false;
+  };
+
+  // Toggle Request Fulfilled status (Hanya pembuat postingan yang boleh menandai selesai)
   const handleToggleRequestFulfill = (reqId: string) => {
+    const target = itemRequests.find((r) => r.id === reqId);
+    if (!target) return;
+
+    if (!isPostCreator(target)) {
+      showToast('Akses ditolak: Hanya pembuat postingan yang dapat menentukan status selesai.');
+      return;
+    }
+
+    const nextStatus = target.status === 'open' ? 'fulfilled' : 'open';
     const updated = itemRequests.map((r) =>
-      r.id === reqId ? { ...r, status: (r.status === 'open' ? 'fulfilled' : 'open') as any } : r
+      r.id === reqId ? { ...r, status: nextStatus as any } : r
     );
     setItemRequests(updated);
     saveStoredItemRequests(updated);
-    showToast('Status permintaan berhasil diperbarui!');
+
+    if (nextStatus === 'fulfilled') {
+      confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
+      showToast('Permintaan berhasil ditandai Selesai / Terpenuhi!');
+    } else {
+      showToast('Permintaan berhasil dibuka kembali di Papan Dicari.');
+    }
+  };
+
+  // Batalkan / Hapus postingan permintaan (Hanya pembuat postingan yang boleh membatalkan)
+  const handleCancelRequest = (reqId: string) => {
+    const target = itemRequests.find((r) => r.id === reqId);
+    if (!target) return;
+
+    if (!isPostCreator(target)) {
+      showToast('Akses ditolak: Hanya pembuat postingan yang dapat membatalkan postingan ini.');
+      return;
+    }
+
+    const updated = itemRequests.filter((r) => r.id !== reqId);
+    setItemRequests(updated);
+    saveStoredItemRequests(updated);
+    setCancelingReqId(null);
+    showToast('Permintaan barang berhasil dibatalkan dan dihapus dari Papan Dicari.');
   };
 
   // Handle Send In-App Chat
@@ -574,13 +668,13 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                     id="reuse-location-select"
                   >
                     <option value="Semua Lokasi">Semua Lokasi Kampus</option>
-                    <option value="Fakultas Teknik">Fakultas Teknik</option>
-                    <option value="Fakultas Kedokteran">Fakultas Kedokteran</option>
-                    <option value="Fakultas MIPA">Fakultas MIPA</option>
-                    <option value="Fakultas Hukum">Fakultas Hukum</option>
-                    <option value="Asrama Mahasiswa Ramsis">Asrama Ramsis</option>
-                    <option value="Kantin Pusat / Danau">Kantin Danau & Perpus</option>
-                    <option value="Kos Tamalanrea">Area Kos Tamalanrea</option>
+                    <option value="Fakultas Teknik">Fakultas Teknik (Parangtambung)</option>
+                    <option value="Fakultas MIPA">Fakultas MIPA (Parangtambung)</option>
+                    <option value="Fakultas Seni & Desain">Fakultas Seni & Desain (Tidung)</option>
+                    <option value="Fakultas Ilmu Keolahragaan">FIKK UNM (Banta-Bantaeng)</option>
+                    <option value="Menara Pinisi">Menara Pinisi (Gunungsari)</option>
+                    <option value="Asrama Mahasiswa UNM">Asrama & PKM Parangtambung</option>
+                    <option value="Area Kos Mallengkeri / Pettarani">Area Kos Sekitar Kampus UNM</option>
                   </select>
                   <div className="absolute right-4 text-slate-400 pointer-events-none text-xs">▼</div>
                 </div>
@@ -826,7 +920,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                           {item.isVerifiedStudent && (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-900/90 text-teal-200 backdrop-blur-xs flex items-center gap-1">
                               <UserCheck className="w-3 h-3 text-teal-300" />
-                              <span>Mahasiswa Unhas</span>
+                              <span>Mahasiswa UNM</span>
                             </span>
                           )}
                         </div>
@@ -1092,12 +1186,23 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
               <div className="flex-1 relative w-full">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
+                  id="input-search-requests"
                   type="text"
                   value={requestSearchQuery}
                   onChange={(e) => setRequestSearchQuery(e.target.value)}
                   placeholder="Cari kebutuhan: kardus, buku diktat, hanger, jas lab..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  className="w-full pl-10 pr-9 py-2.5 rounded-xl border border-slate-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
                 />
+                {requestSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setRequestSearchQuery('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold p-1 cursor-pointer"
+                    title="Hapus pencarian"
+                  >
+                    ✕
+                  </button>
+                )}
               </div>
 
               {/* Urgency Filter Pills */}
@@ -1151,8 +1256,15 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
               {filteredItemRequests.map((req) => {
                 const isFulfilled = req.status === 'fulfilled';
                 const isUrgent = req.urgency === 'Segera';
-                const whatsappUrl = `https://wa.me/${req.contactWhatsapp.replace(/^0/, '62').replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                  `Halo ${req.requesterName}, saya melihat postingan Anda di Papan Dicari SIPAS-Kampus mengenai "${req.title}". Saya memiliki barang tersebut dan siap bantu COD di ${req.preferredMeetupPoint}.`
+                const isOwner = isPostCreator(req);
+                const displayName = req.requesterName || req.userName || 'Rekan Mahasiswa';
+                const displayFaculty = req.requesterFaculty || req.userFaculty || 'Sivitas Akademika';
+                const displayDate = req.postedAt || req.createdAt || 'Baru saja';
+                const displaySpot = req.preferredMeetupPoint || req.preferredCodSpot || 'Lobi Utama Kampus';
+                const rawWhatsapp = req.contactWhatsapp || '081234567890';
+                const cleanWhatsapp = rawWhatsapp.replace(/^0/, '62').replace(/[^0-9]/g, '') || '6281234567890';
+                const whatsappUrl = `https://wa.me/${cleanWhatsapp}?text=${encodeURIComponent(
+                  `Halo ${displayName}, saya melihat postingan Anda di Papan Dicari SIPAS-Kampus mengenai "${req.title || 'Barang Kebutuhan'}". Saya memiliki barang tersebut dan siap bantu COD di ${displaySpot}.`
                 )}`;
 
                 return (
@@ -1161,15 +1273,17 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                     className={`bg-white rounded-2xl border transition-all p-5 flex flex-col justify-between gap-4 shadow-xs hover:shadow-md ${
                       isFulfilled
                         ? 'border-slate-200 bg-slate-50/60 opacity-80'
+                        : isOwner
+                        ? 'border-teal-300 ring-1 ring-teal-200 shadow-sm'
                         : isUrgent
                         ? 'border-rose-200 hover:border-rose-400'
                         : 'border-slate-200 hover:border-amber-400'
                     }`}
                   >
                     <div className="space-y-3">
-                      {/* Urgency & Status Tags */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
+                      {/* Urgency, Status Tags & Post Ownership Badge */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span
                             className={`px-2.5 py-0.5 rounded-md text-[11px] font-black border flex items-center gap-1 ${
                               req.urgency === 'Segera'
@@ -1182,11 +1296,19 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                             {req.urgency === 'Segera' && (
                               <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping" />
                             )}
-                            <span>{req.urgency}</span>
+                            <span>{req.urgency || 'Santai'}</span>
                           </span>
                           <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-600">
-                            {req.category}
+                            {req.category || 'Peralatan Kos'}
                           </span>
+
+                          {/* Penanda bahwa postingan ini dibuat oleh akun yang sedang aktif */}
+                          {isOwner && (
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-black bg-teal-50 text-teal-700 border border-teal-200 flex items-center gap-1">
+                              <UserCheck className="w-3 h-3 text-teal-600" />
+                              <span>Postingan Anda</span>
+                            </span>
+                          )}
                         </div>
 
                         <span
@@ -1203,10 +1325,10 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                       {/* Request Title & Description */}
                       <div>
                         <h3 className={`font-black text-sm sm:text-base leading-snug ${isFulfilled ? 'line-through text-slate-500' : 'text-slate-900'}`}>
-                          {req.title}
+                          {req.title || 'Barang Kebutuhan'}
                         </h3>
                         <p className="text-xs text-slate-600 mt-1 line-clamp-3 leading-relaxed">
-                          {req.description}
+                          {req.description || 'Tidak ada deskripsi tambahan.'}
                         </p>
                       </div>
 
@@ -1214,11 +1336,11 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                       <div className="pt-2 border-t border-slate-100 space-y-2 text-xs">
                         <div className="flex items-center gap-2">
                           <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-800 font-black text-xs flex items-center justify-center">
-                            {req.requesterName.charAt(0)}
+                            {(displayName.charAt(0) || 'M').toUpperCase()}
                           </div>
                           <div>
-                            <div className="font-bold text-slate-900 text-xs">{req.requesterName}</div>
-                            <div className="text-[10px] text-slate-500">{req.requesterFaculty} • {req.postedAt}</div>
+                            <div className="font-bold text-slate-900 text-xs">{displayName}</div>
+                            <div className="text-[10px] text-slate-500">{displayFaculty} • {displayDate}</div>
                           </div>
                         </div>
 
@@ -1226,35 +1348,85 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                           <ShieldCheck className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
                           <div>
                             <span className="font-bold">Titik COD Aman Pilihan: </span>
-                            <span>{req.preferredMeetupPoint}</span>
+                            <span>{displaySpot}</span>
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    {/* Action Buttons */}
-                    <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
-                      <a
-                        href={whatsappUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
-                      >
-                        <Phone className="w-3.5 h-3.5" />
-                        <span>Bantu via WA</span>
-                      </a>
+                    {/* Action Buttons: Khusus Pembuat vs Pengguna Lain */}
+                    <div className="pt-2.5 border-t border-slate-100">
+                      {isOwner ? (
+                        cancelingReqId === req.id ? (
+                          <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 space-y-2 text-xs">
+                            <p className="font-bold text-rose-800">
+                              Batalkan & hapus postingan ini dari Papan Dicari?
+                            </p>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={() => handleCancelRequest(req.id)}
+                                className="flex-1 py-1.5 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs cursor-pointer shadow-xs transition-colors"
+                              >
+                                Ya, Batalkan
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCancelingReqId(null)}
+                                className="py-1.5 px-3 rounded-lg bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 font-bold text-xs cursor-pointer transition-colors"
+                              >
+                                Kembali
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            {/* Tombol Tandai Selesai / Buka Kembali (HANYA MUNCUL UNTUK PEMBUAT POSTINGAN) */}
+                            <button
+                              type="button"
+                              onClick={() => handleToggleRequestFulfill(req.id)}
+                              className={`flex-1 py-2 px-3 rounded-xl font-bold text-xs transition-colors cursor-pointer border flex items-center justify-center gap-1.5 shadow-2xs ${
+                                isFulfilled
+                                  ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200'
+                                  : 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600'
+                              }`}
+                              title="Tentukan bahwa permintaan Anda sudah selesai atau ingin dibuka kembali"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>{isFulfilled ? 'Buka Kembali' : 'Tandai Selesai'}</span>
+                            </button>
 
-                      <button
-                        onClick={() => handleToggleRequestFulfill(req.id)}
-                        className={`py-2 px-3 rounded-xl font-bold text-xs transition-colors cursor-pointer border ${
-                          isFulfilled
-                            ? 'bg-slate-100 text-slate-700 hover:bg-slate-200 border-slate-200'
-                            : 'bg-white text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 border-slate-200'
-                        }`}
-                        title="Ubah status terpenuhi"
-                      >
-                        {isFulfilled ? 'Buka Kembali' : 'Tandai Selesai'}
-                      </button>
+                            {/* Tombol Batalkan / Hapus Postingan (HANYA MUNCUL UNTUK PEMBUAT POSTINGAN) */}
+                            <button
+                              type="button"
+                              onClick={() => setCancelingReqId(req.id)}
+                              className="py-2 px-3 rounded-xl font-bold text-xs transition-colors cursor-pointer border border-rose-200 bg-rose-50 hover:bg-rose-100 text-rose-700 flex items-center justify-center gap-1.5 shadow-2xs"
+                              title="Batalkan dan hapus postingan ini"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Batalkan</span>
+                            </button>
+                          </div>
+                        )
+                      ) : (
+                        /* Tampilan untuk Pengguna Lain (Bukan Pembuat Postingan): */
+                        isFulfilled ? (
+                          <div className="w-full py-2 px-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 font-bold text-xs flex items-center justify-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Permintaan Telah Selesai / Terpenuhi</span>
+                          </div>
+                        ) : (
+                          <a
+                            href={whatsappUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                          >
+                            <Phone className="w-3.5 h-3.5" />
+                            <span>Bantu via WA</span>
+                          </a>
+                        )
+                      )}
                     </div>
                   </div>
                 );
@@ -2027,7 +2199,7 @@ export const CommunityView: React.FC<CommunityViewProps> = ({
                     required
                     value={formLocation}
                     onChange={(e) => setFormLocation(e.target.value)}
-                    placeholder="Contoh: Lobi FT Unhas"
+                    placeholder="Contoh: Lobi Dekanat FT UNM / Menara Pinisi"
                     className="w-full px-3 py-2 rounded-xl border border-slate-200 font-medium"
                   />
                 </div>

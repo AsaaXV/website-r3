@@ -44,6 +44,8 @@ import { GISFacility, WasteCategoryType } from '../types';
 
 interface FacilitiesViewProps {
   onOpenPickupModal: () => void;
+  onRequestPickup?: () => void;
+  currentUserRole?: string;
 }
 
 // Campus Location Presets for 1-click positioning across university grounds
@@ -56,40 +58,40 @@ export interface CampusPreset {
 
 export const CAMPUS_PRESETS: CampusPreset[] = [
   {
-    id: 'ft-unhas',
-    name: 'Fakultas Teknik (Gedung Dekanat & Elektro)',
-    faculty: 'Fakultas Teknik',
-    coords: { lat: -5.1345, lng: 119.4975 },
+    id: 'ft-unm',
+    name: 'Fakultas Teknik UNM (Parangtambung)',
+    faculty: 'Fakultas Teknik (FT)',
+    coords: { lat: -5.1889, lng: 119.4235 },
   },
   {
-    id: 'fmipa-unhas',
-    name: 'Fakultas MIPA (Laboratorium Dasar)',
-    faculty: 'Fakultas MIPA',
-    coords: { lat: -5.1362, lng: 119.4951 },
+    id: 'fmipa-unm',
+    name: 'Fakultas MIPA UNM (Parangtambung)',
+    faculty: 'Fakultas MIPA (FMIPA)',
+    coords: { lat: -5.1895, lng: 119.4245 },
   },
   {
-    id: 'ramsis-unhas',
-    name: 'Asrama Mahasiswa Ramsis Blok B',
-    faculty: 'Asrama Mahasiswa Ramsis',
-    coords: { lat: -5.1310, lng: 119.4960 },
+    id: 'pinisi-unm',
+    name: 'Menara Pinisi & Rektorat UNM Gunungsari',
+    faculty: 'Rektorat & Menara Pinisi',
+    coords: { lat: -5.1668, lng: 119.4349 },
   },
   {
-    id: 'kantin-danau',
-    name: 'Kantin Pusat & Danau Rektorat',
-    faculty: 'Rektorat & PKM Kampus',
-    coords: { lat: -5.1339, lng: 119.4948 },
+    id: 'fsd-unm',
+    name: 'Fakultas Seni & Desain UNM (Tidung)',
+    faculty: 'Fakultas Seni & Desain (FSD)',
+    coords: { lat: -5.1760, lng: 119.4385 },
   },
   {
-    id: 'fk-unhas',
-    name: 'Fakultas Kedokteran (RSP Unhas)',
-    faculty: 'Fakultas Kedokteran',
-    coords: { lat: -5.1355, lng: 119.4920 },
+    id: 'fikk-unm',
+    name: 'Fakultas Ilmu Keolahragaan & Kesehatan (Banta-Bantaeng)',
+    faculty: 'FIKK UNM',
+    coords: { lat: -5.1620, lng: 119.4310 },
   },
   {
-    id: 'faperta-unhas',
-    name: 'Fakultas Pertanian & Kehutanan',
-    faculty: 'Fakultas Pertanian',
-    coords: { lat: -5.1370, lng: 119.4915 },
+    id: 'fip-unm',
+    name: 'Fakultas Ilmu Pendidikan & Bahasa (Gunungsari)',
+    faculty: 'FIP & FBS UNM',
+    coords: { lat: -5.1678, lng: 119.4360 },
   },
 ];
 
@@ -160,14 +162,14 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
   const [mapType, setMapType] = useState<'roadmap' | 'satellite' | 'hybrid' | 'terrain'>('roadmap');
 
   // Geographic coordinates
-  // Midpoint between Unhas Tamalanrea (-5.1345) and TPA Tamangapa (-5.1765) to frame the full corridor
-  const fullCorridorCenter = { lat: -5.1555, lng: 119.4950 };
-  const campusCenter = { lat: -5.1345, lng: 119.4975 };
+  // Midpoint between UNM Parangtambung (-5.1889) and TPA Tamangapa (-5.1765) to frame the full corridor
+  const fullCorridorCenter = { lat: -5.1820, lng: 119.4588 };
+  const campusCenter = { lat: -5.1889, lng: 119.4235 };
   const tpaCenter = { lat: -5.1765, lng: 119.4942 };
 
   // User location state
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(campusCenter);
-  const [userLocationName, setUserLocationName] = useState<string>('Fakultas Teknik (Gedung Dekanat & Elektro)');
+  const [userLocationName, setUserLocationName] = useState<string>('Fakultas Teknik UNM (Parangtambung)');
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [isLocating, setIsLocating] = useState<boolean>(false);
   const [locationStatusMessage, setLocationStatusMessage] = useState<string | null>(null);
@@ -524,7 +526,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                       Titik Pengamatan Spasial
                     </span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
-                      TPA Tamangapa berjarak ±5.2 km dari Kampus Unhas
+                      TPA Tamangapa berjarak ±6.8 km dari Kampus UNM
                     </span>
                   </div>
                   <h3 className="text-sm sm:text-base font-extrabold text-slate-900 mt-0.5 flex items-center gap-1.5">
@@ -566,7 +568,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
               <div className="flex items-center justify-between mb-2 text-xs">
                 <span className="font-semibold text-slate-700 flex items-center gap-1.5">
                   <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                  <span>Pilih Lokasi Awal Mahasiswa (Unhas Tamalanrea):</span>
+                  <span>Pilih Lokasi Awal Mahasiswa (Kampus UNM):</span>
                 </span>
                 <span className="text-slate-400 text-[11px]">Simulasi jarak dari fakultas Anda ke TPA</span>
               </div>
@@ -584,7 +586,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                       }`}
                     >
                       <div className="text-[11px] font-bold truncate">{preset.faculty}</div>
-                      <div className="text-[10px] text-slate-500 truncate mt-0.5">Unhas Tamalanrea</div>
+                      <div className="text-[10px] text-slate-500 truncate mt-0.5">Kampus UNM</div>
                     </button>
                   );
                 })}
@@ -839,11 +841,11 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                     </svg>
 
                     <svg className="absolute inset-0 w-full h-full pointer-events-none" viewBox="0 0 100 100" preserveAspectRatio="none">
-                      {/* Danau Unhas */}
+                      {/* Kampus Gunungsari & Menara Pinisi */}
                       <ellipse cx="48" cy="22" rx="14" ry="7" fill="#0284c7" opacity="0.35" />
-                      <text x="44" y="23" fill="#7dd3fc" fontSize="2" fontWeight="bold" opacity="0.8">Danau Unhas</text>
+                      <text x="40" y="23" fill="#7dd3fc" fontSize="2" fontWeight="bold" opacity="0.8">Zona UNM Gunungsari / Pinisi</text>
 
-                      {/* Main Transport Corridor Line (Jl. Perintis Kemerdekaan -> Jl. Antang Raya -> TPA Tamangapa) */}
+                      {/* Main Transport Corridor Line (Jl. A.P. Pettarani -> Jl. Hertasning -> TPA Tamangapa) */}
                       <path
                         d="M 50 18 L 46 36 L 40 54 L 46 72 L 52 86"
                         fill="none"
@@ -853,8 +855,8 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                         opacity="0.75"
                       />
                       {/* Highway text annotations */}
-                      <text x="32" y="44" fill="#fda4af" fontSize="1.8" fontWeight="600" opacity="0.7">Jl. Perintis Kemerdekaan</text>
-                      <text x="44" y="66" fill="#fda4af" fontSize="1.8" fontWeight="600" opacity="0.7">Jl. Antang Raya</text>
+                      <text x="32" y="44" fill="#fda4af" fontSize="1.8" fontWeight="600" opacity="0.7">Jl. A.P. Pettarani</text>
+                      <text x="44" y="66" fill="#fda4af" fontSize="1.8" fontWeight="600" opacity="0.7">Jl. Hertasning / Borong</text>
 
                       {/* Tamangapa Landfill Mountain Area contour rings */}
                       <ellipse cx="52" cy="86" rx="20" ry="10" fill="#be123c" opacity="0.18" />
@@ -873,7 +875,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                             : 'Mode Peta Topologi Koridor Kampus Aktif'}
                         </span>
                         <span className="hidden sm:inline text-[11px] text-slate-400">
-                          (Unhas Tamalanrea ➔ TPA Tamangapa ±10.4 km)
+                          (Kampus UNM ➔ TPA Tamangapa ±6.8 km)
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1040,7 +1042,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                       <div className="flex items-center gap-2">
                         <Route className="w-4 h-4 text-rose-400" />
                         <span>
-                          <strong>Koridor Angkut:</strong> Kampus UNHAS ➔ Jl. Perintis ➔ Jl. Antang ➔ TPA Tamangapa ({primaryTpa.liveDistanceKm} km)
+                          <strong>Koridor Angkut:</strong> Kampus UNM ➔ Jl. Mallengkeri ➔ Jl. Hertasning ➔ Jl. Antang ➔ TPA Tamangapa ({primaryTpa.liveDistanceKm} km)
                         </span>
                       </div>
                       <div className="flex items-center gap-2">
@@ -1054,7 +1056,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                           onClick={handleFocusCampus}
                           className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] transition-colors cursor-pointer"
                         >
-                          Fokus Kampus UNHAS
+                          Fokus Kampus UNM
                         </button>
                       </div>
                     </div>
@@ -1355,7 +1357,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                         >
                           <div className="truncate pr-2">
                             <div className="truncate text-xs font-medium text-slate-900">{fac.name}</div>
-                            <div className="text-[10px] text-amber-800 truncate">{fac.acceptedItemsDetail || fac.categoryLabel}</div>
+                            <div className="text-[10px] text-amber-800 truncate">{fac.acceptedItemsDetail || fac.type}</div>
                           </div>
                           <div className="text-right shrink-0 text-[11px] font-bold text-amber-800">
                             {fac.liveDistanceMeters < 1000 ? `${fac.liveDistanceMeters}m` : `${fac.liveDistanceKm}km`}
@@ -1411,7 +1413,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                 Profil Realita TPA Tamangapa (TPA Antang): Muara Akhir Sampah Kota
               </h3>
               <p className="text-xs text-slate-600 mt-1 max-w-2xl">
-                TPA Tamangapa adalah satu-satunya tempat pemrosesan limbah sampah akhir skala kota yang menampung timbunan dari 15 kecamatan di Makassar, termasuk residu dari Universitas Hasanuddin.
+                TPA Tamangapa adalah satu-satunya tempat pemrosesan limbah sampah akhir skala kota yang menampung timbunan dari 15 kecamatan di Makassar, termasuk residu dari Universitas Negeri Makassar (UNM).
               </p>
             </div>
 
@@ -1500,7 +1502,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
             <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200 space-y-3">
               <div className="flex items-center gap-2 text-emerald-800 font-bold text-sm">
                 <CheckCircle2 className="w-5 h-5" />
-                <h4>Solusi Nyata: Reduksi di Sumber Kampus (Unhas Tamalanrea)</h4>
+                <h4>Solusi Nyata: Reduksi di Sumber Kampus (UNM Makassar)</h4>
               </div>
               <ul className="space-y-2 text-xs text-slate-700">
                 <li className="flex items-start gap-2">
@@ -1593,7 +1595,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                   <ArrowRight className="w-4 h-4 rotate-90" />
                 </div>
                 <div className="p-3 bg-white rounded-xl border border-emerald-200 text-xs space-y-1">
-                  <div className="font-bold text-slate-900">2. Drop Point Smart Bin / TPS3R Tamalanrea</div>
+                  <div className="font-bold text-slate-900">2. Drop Point Smart Bin / TPS3R UNM Parangtambung</div>
                   <p className="text-slate-600">Mahasiswa mendapat Eco-Points, sampah organik diolah larva maggot menjadi pupuk organik.</p>
                 </div>
                 <div className="flex justify-center text-emerald-500">
@@ -1709,7 +1711,7 @@ export const FacilitiesView: React.FC<FacilitiesViewProps> = ({ onOpenPickupModa
                 Optimasi Rute Pengangkutan Armada Kampus (Vehicle Routing Problem)
               </h3>
               <p className="text-xs text-slate-500">
-                Pengangkutan terjadwal dari drop point fakultas langsung ke TPS3R Tamalanrea untuk dipilah, sehingga residu yang menuju ke TPA Tamangapa terpangkas hingga 85%.
+                Pengangkutan terjadwal dari drop point fakultas langsung ke TPS3R UNM Parangtambung untuk dipilah, sehingga residu yang menuju ke TPA Tamangapa terpangkas hingga 85%.
               </p>
             </div>
             <button

@@ -25,6 +25,7 @@ interface UserInboxModalProps {
   onOpenUserProfile?: (userId: string, userName: string) => void;
   threads: ChatThread[];
   onSendMessage: (threadId: string, text: string) => void;
+  onSelectThread?: (threadId: string) => void;
   onStartNewChat?: (participant: UserProfile, itemContext?: any) => void;
 }
 
@@ -36,6 +37,7 @@ export const UserInboxModal: React.FC<UserInboxModalProps> = ({
   onOpenUserProfile,
   threads,
   onSendMessage,
+  onSelectThread,
   onStartNewChat,
 }) => {
   const [selectedThreadId, setSelectedThreadId] = useState<string>(
@@ -43,26 +45,44 @@ export const UserInboxModal: React.FC<UserInboxModalProps> = ({
   );
   const [inputMessage, setInputMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  const [isSending, setIsSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastInitialThreadIdRef = useRef<string | null | undefined>(initialThreadId);
 
-  // Update selected thread if initialThreadId changes
+  // Synchronize when parent explicitly passes a new initialThreadId (e.g. user clicked Chat on a listing)
   useEffect(() => {
-    if (initialThreadId) {
+    if (initialThreadId && initialThreadId !== lastInitialThreadIdRef.current) {
       setSelectedThreadId(initialThreadId);
-    } else if (!selectedThreadId && threads.length > 0) {
+      lastInitialThreadIdRef.current = initialThreadId;
+    }
+  }, [initialThreadId]);
+
+  // Ensure selectedThreadId points to a valid thread, without resetting when user sends a message
+  useEffect(() => {
+    if (threads.length === 0) {
+      if (selectedThreadId !== '') {
+        setSelectedThreadId('');
+      }
+    } else if (!selectedThreadId || !threads.some((t) => t.id === selectedThreadId)) {
       setSelectedThreadId(threads[0].id);
     }
-  }, [initialThreadId, threads]);
+  }, [threads, selectedThreadId]);
 
   // Scroll to bottom of message list
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [selectedThreadId, threads, isTyping]);
+  }, [selectedThreadId, threads]);
 
   if (!isOpen) return null;
 
   const currentThread = threads.find((t) => t.id === selectedThreadId) || threads[0];
+
+  const handleThreadSelect = (threadId: string) => {
+    setSelectedThreadId(threadId);
+    if (onSelectThread) {
+      onSelectThread(threadId);
+    }
+  };
 
   const filteredThreads = threads.filter(
     (t) =>
@@ -73,26 +93,17 @@ export const UserInboxModal: React.FC<UserInboxModalProps> = ({
 
   const handleSend = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!inputMessage.trim() || !currentThread) return;
+    if (!inputMessage.trim() || !currentThread || isSending) return;
 
     const messageText = inputMessage.trim();
+    setIsSending(true);
     setInputMessage('');
     onSendMessage(currentThread.id, messageText);
 
-    // Simulate realistic peer response after 1.2s
-    setIsTyping(true);
+    // Keep active thread locked to current conversation, prevent double submission
     setTimeout(() => {
-      setIsTyping(false);
-      const sampleReplies = [
-        `Siap kak! Saya tunggu di ${currentThread.participantFaculty || 'kampus'}. Nanti kabari kalau sudah sampai ya.`,
-        `Oke sepakat! Sampah/barangnya sudah saya siapkan. Terima kasih banyak ya! 👍`,
-        `Wah boleh banget! Besok jam istirahat kuliah kita ketemu langsung ya kak.`,
-        `Halo! Masih ada kok, nanti saya bawa ke lobi kampus saat jam istirahat siang.`,
-      ];
-      const replyText =
-        sampleReplies[Math.floor(Math.random() * sampleReplies.length)];
-      onSendMessage(currentThread.id, replyText);
-    }, 1200);
+      setIsSending(false);
+    }, 250);
   };
 
   const handleQuickChip = (chipText: string) => {
@@ -160,7 +171,7 @@ export const UserInboxModal: React.FC<UserInboxModalProps> = ({
                   return (
                     <div
                       key={thread.id}
-                      onClick={() => setSelectedThreadId(thread.id)}
+                      onClick={() => handleThreadSelect(thread.id)}
                       className={`p-3 cursor-pointer transition-all flex items-start gap-3 text-left ${
                         isSelected
                           ? 'bg-emerald-50/80 border-l-4 border-l-emerald-600'
@@ -302,7 +313,9 @@ export const UserInboxModal: React.FC<UserInboxModalProps> = ({
                 </div>
 
                 {currentThread.messages.map((msg) => {
-                  const isSelf = msg.isSelf;
+                  const isSelf =
+                    Boolean(currentUser?.id && msg.senderId === currentUser.id) ||
+                    (!currentUser?.id && Boolean(msg.isSelf));
                   return (
                     <div
                       key={msg.id}
@@ -342,12 +355,6 @@ export const UserInboxModal: React.FC<UserInboxModalProps> = ({
                   );
                 })}
 
-                {isTyping && (
-                  <div className="flex items-center gap-1.5 text-xs text-slate-400 italic bg-white border border-slate-200 px-3 py-1.5 rounded-full max-w-fit animate-pulse">
-                    <span>{currentThread.participantName} sedang mengetik...</span>
-                  </div>
-                )}
-
                 <div ref={messagesEndRef} />
               </div>
 
@@ -383,14 +390,15 @@ export const UserInboxModal: React.FC<UserInboxModalProps> = ({
                   value={inputMessage}
                   onChange={(e) => setInputMessage(e.target.value)}
                   placeholder="Ketik pesan kepada rekan mahasiswa..."
-                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none"
+                  disabled={isSending}
+                  className="flex-1 px-3 py-2 text-xs rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none disabled:bg-slate-100"
                 />
                 <button
                   type="submit"
-                  disabled={!inputMessage.trim()}
+                  disabled={!inputMessage.trim() || isSending}
                   className={`p-2 rounded-xl text-white transition-all ${
-                    inputMessage.trim()
-                      ? 'bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30'
+                    inputMessage.trim() && !isSending
+                      ? 'bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-600/30 cursor-pointer'
                       : 'bg-slate-300 cursor-not-allowed'
                   }`}
                 >

@@ -25,6 +25,8 @@ import {
   Flame,
   Radio,
   SlidersHorizontal,
+  LayoutDashboard,
+  FileText,
 } from 'lucide-react';
 import { UserProfile, ReuseItem } from '../types';
 import { ConsoleRightSidebar } from './ConsoleRightSidebar';
@@ -39,12 +41,16 @@ interface ConsoleLayoutProps {
   unreadMessagesCount: number;
   onOpenInbox: () => void;
   onOpenMyProfile: () => void;
-  onOpenRoleModal: () => void;
-  onOpenSusModal: () => void;
+  onOpenRoleModal?: () => void;
+  onOpenRoleApplicationModal?: () => void;
+  onOpenSurveyModal?: () => void;
+  activeSurveysCount?: number;
+  totalManagedSurveysCount?: number;
+  onOpenSusModal?: () => void;
   onOpenAuthModal: (mode: 'login' | 'register') => void;
   onLogout: () => void;
   onOpenOnboarding: () => void;
-  onOpenArchitecture: () => void;
+  onOpenArchitecture?: () => void;
   onOpenChat: (sellerName: string, item?: ReuseItem) => void;
   children: React.ReactNode;
 }
@@ -60,6 +66,10 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
   onOpenInbox,
   onOpenMyProfile,
   onOpenRoleModal,
+  onOpenRoleApplicationModal,
+  onOpenSurveyModal,
+  activeSurveysCount = 0,
+  totalManagedSurveysCount = 0,
   onOpenSusModal,
   onOpenAuthModal,
   onLogout,
@@ -110,13 +120,6 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
       badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300',
     },
     {
-      id: 'fasilitas',
-      label: 'Peta TPA & Drop Box',
-      icon: MapPin,
-      badge: 'Radar TPA',
-      badgeColor: 'bg-rose-100 text-rose-800 dark:bg-rose-950/80 dark:text-rose-300',
-    },
-    {
       id: 'edukasi',
       label: 'Edukasi 3R & Karbon',
       icon: BookOpen,
@@ -135,6 +138,17 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
       icon: ShieldCheck,
       badge: null,
     },
+    ...(currentUser.role === 'admin_kampus' || currentUser.role === 'admin'
+      ? [
+          {
+            id: 'admin',
+            label: 'Admin Dashboard',
+            icon: LayoutDashboard,
+            badge: 'Pusat Kendali',
+            badgeColor: 'bg-purple-100 text-purple-800 dark:bg-purple-950/80 dark:text-purple-300',
+          },
+        ]
+      : []),
   ];
 
   const handleSearchSubmit = (e: React.FormEvent) => {
@@ -190,7 +204,7 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
                   </span>
                 </div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium hidden sm:block">
-                  Sistem Sirkularitas & Reduksi Sampah UNHAS
+                  Sistem Sirkularitas & Reduksi Sampah UNM
                 </div>
               </div>
             </div>
@@ -315,27 +329,18 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
                     <span>Lihat Profil Publik Saya</span>
                   </button>
 
-                  <button
-                    onClick={() => {
-                      setIsProfileDropdownOpen(false);
-                      onOpenRoleModal();
-                    }}
-                    className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5 text-slate-700 dark:text-slate-200"
-                  >
-                    <UserCheck className="w-4 h-4 text-blue-500" />
-                    <span>Ganti Peran (Mahasiswa/Dosen/Petugas)</span>
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      setIsProfileDropdownOpen(false);
-                      onOpenSusModal();
-                    }}
-                    className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5 text-slate-700 dark:text-slate-200"
-                  >
-                    <SlidersHorizontal className="w-4 h-4 text-amber-500" />
-                    <span>Uji Evaluasi Usability (SUS)</span>
-                  </button>
+                  {onOpenRoleApplicationModal && (
+                    <button
+                      onClick={() => {
+                        setIsProfileDropdownOpen(false);
+                        onOpenRoleApplicationModal();
+                      }}
+                      className="w-full px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2.5 text-slate-700 dark:text-slate-200"
+                    >
+                      <UserCheck className="w-4 h-4 text-blue-500" />
+                      <span>Ajukan Perubahan Peran</span>
+                    </button>
+                  )}
 
                   <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
 
@@ -408,44 +413,75 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
             })}
           </div>
 
-          {/* Quick Utility Box */}
+          {/* Quick Utility Box: ALAT RISET */}
           <div className="rounded-2xl bg-white dark:bg-[#131b2e] border border-slate-200/90 dark:border-slate-800 shadow-sm p-3 space-y-2 text-xs">
             <div className="px-2 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              Alat Riset & Panduan
+              Alat Riset
             </div>
 
-            <button
-              onClick={onOpenRoleModal}
-              className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-[#1a233a] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center justify-between text-[11px] font-medium transition-colors cursor-pointer"
-            >
-              <div className="flex items-center gap-2">
-                <UserCheck className="w-3.5 h-3.5 text-blue-500" />
-                <span>Ganti Peran</span>
+            {currentUser.role === 'admin_kampus' || currentUser.role === 'admin' ? (
+              <button
+                onClick={() => setActiveTab('admin')}
+                className="w-full px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-slate-800 dark:text-slate-100 flex items-center justify-between transition-all cursor-pointer group shadow-xs"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <FileText className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-xs group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                      Survei
+                    </div>
+                    <div className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">
+                      {totalManagedSurveysCount} Survei dikelola
+                    </div>
+                  </div>
+                </div>
+                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+              </button>
+            ) : activeSurveysCount > 0 ? (
+              <button
+                onClick={onOpenSurveyModal}
+                className="w-full px-3 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/80 dark:border-emerald-800/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 text-slate-800 dark:text-slate-100 flex items-center justify-between transition-all cursor-pointer group shadow-xs"
+              >
+                <div className="flex items-center gap-2.5">
+                  <div className="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+                    <FileText className="w-3.5 h-3.5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-xs group-hover:text-emerald-600 dark:group-hover:text-emerald-400">
+                      Survei
+                    </div>
+                    <div className="text-[10px] text-emerald-700 dark:text-emerald-300 font-medium">
+                      {activeSurveysCount} Survei tersedia
+                    </div>
+                  </div>
+                </div>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+              </button>
+            ) : (
+              <div className="px-3 py-2 rounded-xl bg-slate-50 dark:bg-[#1a233a] border border-slate-100 dark:border-slate-800/80 text-slate-500 dark:text-slate-400 text-left">
+                <div className="flex items-center gap-2 font-medium text-[11px] text-slate-700 dark:text-slate-300">
+                  <FileText className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Survei</span>
+                </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  Tidak ada survei tersedia.
+                </div>
               </div>
-              <span className="font-bold text-[10px] text-emerald-600 dark:text-emerald-400 capitalize">
-                {currentUser.role}
-              </span>
-            </button>
+            )}
+
+            <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
 
             <button
-              onClick={onOpenSusModal}
-              className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-[#1a233a] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center justify-between text-[11px] font-medium transition-colors cursor-pointer"
+              onClick={onLogout}
+              className="w-full px-2.5 py-1.5 rounded-xl bg-rose-50/70 dark:bg-rose-950/30 hover:bg-rose-100 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-400 flex items-center justify-between text-[11px] font-bold transition-colors cursor-pointer"
             >
               <div className="flex items-center gap-2">
-                <SlidersHorizontal className="w-3.5 h-3.5 text-amber-500" />
-                <span>Skor Usability (SUS)</span>
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Keluar Akun</span>
               </div>
-              <span className="font-mono font-bold text-[10px] text-amber-600 dark:text-amber-400">
-                88.5 A
-              </span>
-            </button>
-
-            <button
-              onClick={onOpenArchitecture}
-              className="w-full px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-[#1a233a] hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-slate-700 dark:text-slate-300 hover:text-emerald-700 dark:hover:text-emerald-300 flex items-center gap-2 text-[11px] font-medium transition-colors cursor-pointer"
-            >
-              <Layers className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Arsitektur & ERD</span>
+              <span className="text-[10px] opacity-75">Tutup Sesi</span>
             </button>
           </div>
         </nav>
@@ -504,23 +540,53 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
               </div>
 
               <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                {currentUser.role === 'admin_kampus' || currentUser.role === 'admin' ? (
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      setActiveTab('admin');
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      <span>Survei Dikelola</span>
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[10px]">
+                      {totalManagedSurveysCount} Dikelola
+                    </span>
+                  </button>
+                ) : activeSurveysCount > 0 ? (
+                  <button
+                    onClick={() => {
+                      setIsMobileMenuOpen(false);
+                      onOpenSurveyModal?.();
+                    }}
+                    className="w-full py-2.5 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold flex items-center justify-between"
+                  >
+                    <span className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      <span>Survei Tersedia</span>
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-slate-950 text-[10px]">
+                      {activeSurveysCount} Tersedia
+                    </span>
+                  </button>
+                ) : (
+                  <div className="py-2 px-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 text-slate-400 text-xs flex items-center gap-2">
+                    <FileText className="w-4 h-4" />
+                    <span>Tidak ada survei tersedia</span>
+                  </div>
+                )}
                 <button
                   onClick={() => {
                     setIsMobileMenuOpen(false);
-                    onOpenRoleModal();
+                    onLogout();
                   }}
-                  className="w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold"
+                  className="w-full py-2 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 text-xs font-bold flex items-center justify-center gap-1.5"
                 >
-                  Ganti Peran ({currentUser.role})
-                </button>
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    onOpenSusModal();
-                  }}
-                  className="w-full py-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-xs font-bold"
-                >
-                  Uji Evaluasi Usability (SUS)
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Keluar Akun</span>
                 </button>
               </div>
             </div>
@@ -574,19 +640,9 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
               <span>Panduan Fitur</span>
             </button>
             <span className="text-slate-300 dark:text-slate-700">•</span>
-            <button
-              onClick={onOpenArchitecture}
-              className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 font-medium cursor-pointer"
-            >
-              Arsitektur Sistem
-            </button>
-            <span className="text-slate-300 dark:text-slate-700">•</span>
-            <button
-              onClick={onOpenSusModal}
-              className="text-slate-600 dark:text-slate-300 hover:text-emerald-600 font-medium cursor-pointer"
-            >
-              Evaluasi SUS
-            </button>
+            <span className="text-slate-400 dark:text-slate-500 font-medium">
+              Sistem Terverifikasi Akademik UNM 2026
+            </span>
           </div>
         </div>
       </footer>

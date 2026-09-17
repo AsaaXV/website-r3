@@ -1,4 +1,4 @@
-export type UserRole = 'mahasiswa' | 'petugas_tps' | 'admin_kampus';
+export type UserRole = 'mahasiswa' | 'dosen' | 'pengelola' | 'mitra' | 'petugas_tps' | 'admin_kampus' | 'admin';
 
 export type WasteCategoryType = 'organik' | 'kertas' | 'plastik' | 'khusus';
 
@@ -22,6 +22,7 @@ export interface WasteCategoryInfo {
 export interface UserProfile {
   id: string;
   nim?: string;
+  batch?: string;
   name: string;
   email: string;
   faculty: string;
@@ -177,6 +178,7 @@ export interface EducationArticle {
 
 export interface ReuseItem {
   id: string;
+  donorId?: string;
   title: string;
   category: 'Buku & Diktat' | 'Elektronik & Kos' | 'Alat Lab & Gambar' | 'Peralatan Kos' | 'Fashion & Sepatu' | 'Lainnya';
   condition: 'Seperti Baru' | 'Sangat Baik' | 'Cukup Baik' | 'Butuh Perbaikan';
@@ -200,6 +202,7 @@ export interface ReuseItem {
 
 export interface ForumPost {
   id: string;
+  authorId?: string;
   authorName: string;
   authorFaculty: string;
   authorRole: string;
@@ -319,5 +322,155 @@ export interface DailyChallenge {
   completed: boolean;
   completedAt?: string;
   iconName: string;
+}
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  type: 'system' | 'reward' | 'challenge' | 'chat' | 'deposit';
+  read: boolean;
+  linkTab?: string;
+}
+
+export interface UserCertificate {
+  certificateNumber: string;
+  userId: string;
+  recipientName: string;
+  faculty: string;
+  major: string;
+  issueDate: string;
+  totalWeightKg: number;
+  ecoPoints: number;
+  level: number;
+  verificationHash: string;
+  verificationUrl: string;
+}
+
+// ==========================================
+// DYNAMIC SURVEY SYSTEM TYPES
+// ==========================================
+
+export type SurveyStatus = 'draft' | 'scheduled' | 'published' | 'active' | 'closed' | 'expired';
+
+export type SurveyQuestionType =
+  | 'single_choice'
+  | 'multiple_choice'
+  | 'likert'
+  | 'yes_no'
+  | 'short_text'
+  | 'long_text'
+  | 'number';
+
+export interface SurveyQuestion {
+  id: string;
+  questionId?: string; // alias for id
+  surveyId: string;
+  question: string;
+  type: SurveyQuestionType;
+  options?: string[]; // For single_choice & multiple_choice
+  required: boolean;
+  order: number;
+  helpText?: string;
+  scaleMin?: number; // default 1
+  scaleMax?: number; // default 5
+  scaleLabels?: { min: string; max: string };
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface Survey {
+  id: string;
+  surveyId?: string; // alias for id
+  title: string;
+  description: string;
+  status: SurveyStatus;
+  startDateTime: string; // ISO or YYYY-MM-DDTHH:mm
+  endDateTime: string;   // ISO or YYYY-MM-DDTHH:mm
+  startDate?: string;    // compatibility
+  endDate?: string;      // compatibility
+  createdBy: string;
+  creatorId?: string;
+  createdAt: string;
+  updatedAt: string;
+  allowResubmission?: boolean;
+  questions: SurveyQuestion[];
+}
+
+export interface SurveyAnswer {
+  id: string;
+  responseId: string;
+  questionId: string;
+  value: string | string[] | number;
+}
+
+export interface SurveyResponse {
+  id: string;
+  responseId?: string; // alias for id
+  surveyId: string;
+  userId: string;
+  userName?: string;
+  userFaculty?: string;
+  userMajor?: string;
+  userRole?: string;
+  userBatch?: string;
+  submittedAt: string;
+  answers: SurveyAnswer[];
+}
+
+// ==========================================
+// ROLE APPLICATION & REVIEW TYPES
+// ==========================================
+
+export type RoleRequestStatus = 'pending' | 'approved' | 'rejected';
+
+export interface RoleRequest {
+  id: string;
+  userId: string;
+  requestedRole: UserRole;
+  fullName: string;
+  identityNumber: string; // NIM, NIP, NIDN, ID Mitra
+  faculty: string;
+  reason: string;
+  evidence: string; // Deskripsi dokumen atau nomor SK
+  status: RoleRequestStatus;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  reviewNotes?: string;
+  createdAt: string;
+}
+
+// ==========================================
+// DYNAMIC REUSE CATEGORY SYSTEM
+// ==========================================
+
+export interface ReuseCategory {
+  id: string;
+  name: string;
+  description: string;
+  status: 'active' | 'inactive';
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ==========================================
+// OFFICIAL COMMUNITY POSTS
+// ==========================================
+
+export interface OfficialCommunityPost {
+  id: string;
+  title: string;
+  content: string;
+  image?: string;
+  categoryId: string;
+  categoryName: string;
+  status: 'draft' | 'published' | 'archived';
+  createdBy: string;
+  publishedAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 

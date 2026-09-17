@@ -79,26 +79,26 @@ const PEERS_ONLINE: OnlinePeer[] = [
 const CAMPUS_GROUPS = [
   {
     id: 'grp_1',
-    name: 'BEM FT-UH Zero Waste',
+    name: 'BEM FT-UNM Zero Waste',
     members: 142,
     tag: 'Komunitas Fakultas',
-    activeTopic: 'Operasi Pilah Kardus Ujian',
+    activeTopic: 'Operasi Pilah Kardus Parangtambung',
     color: 'emerald',
   },
   {
     id: 'grp_2',
-    name: 'Mapala Lingkungan Unhas',
+    name: 'Mapala Sintalaras UNM',
     members: 88,
     tag: 'Kelompok Mahasiswa',
-    activeTopic: 'Pembersihan Danau Kampus',
+    activeTopic: 'Pembersihan Kawasan Kampus Hijau',
     color: 'blue',
   },
   {
     id: 'grp_3',
-    name: 'Bank Sampah Unit Tamalanrea',
+    name: 'Bank Sampah Unit UNM Peduli',
     members: 215,
     tag: 'Mitra Pengolahan',
-    activeTopic: 'Jemput Jelantah & Plastik',
+    activeTopic: 'Jemput Jelantah & Plastik UNM',
     color: 'amber',
   },
 ];
@@ -252,13 +252,19 @@ export const ConsoleRightSidebar: React.FC<ConsoleRightSidebarProps> = ({
                     <span>{peer.streakDays}h</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => onOpenChat(peer.name)}
-                  className="p-1.5 rounded-lg bg-slate-100 dark:bg-[#1a233a] hover:bg-emerald-100 dark:hover:bg-emerald-950/70 hover:text-emerald-700 dark:hover:text-emerald-300 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
-                  title={`Kirim pesan ke ${peer.name}`}
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                </button>
+                {peer.name.toLowerCase() === currentUser.name.toLowerCase() ? (
+                  <span className="text-[10px] font-semibold text-slate-400 bg-slate-100 dark:bg-[#1a233a] px-2 py-0.5 rounded-md">
+                    Anda
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => onOpenChat(peer.name)}
+                    className="p-1.5 rounded-lg bg-slate-100 dark:bg-[#1a233a] hover:bg-emerald-100 dark:hover:bg-emerald-950/70 hover:text-emerald-700 dark:hover:text-emerald-300 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                    title={`Kirim pesan ke ${peer.name}`}
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))}

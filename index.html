@@ -3,15 +3,90 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>EcoCampus 3R - Sistem Informasi Bank Sampah & Ekologi Kampus</title>
-    <meta name="description" content="Platform edukasi dan literasi pengelolaan sampah 3R kampus dengan panduan visual pemilahan material, kuis interaktif pilah cerdas, mitos vs fakta ekologi, dan timeline masa urai sampah." />
-    <meta name="keywords" content="EcoCampus, 3R, bank sampah kampus, bursa reuse, zero waste, pilah sampah, AI scanner material, keberlanjutan kampus" />
+    <title>EcoCampus 3R UNM - Sistem Informasi Bank Sampah & Ekologi Universitas Negeri Makassar</title>
+    <meta name="description" content="Platform digital pengelolaan sampah 3R, Bank Sampah Kampus, Bursa Reuse, dan edukasi sirkularitas khusus sivitas akademika Universitas Negeri Makassar (UNM)." />
+    <meta name="keywords" content="EcoCampus UNM, Universitas Negeri Makassar, bank sampah UNM, 3R UNM, bursa reuse UNM, Menara Pinisi, Parangtambung, Gunungsari, pilah sampah kampus" />
     <meta name="theme-color" content="#059669" />
-    <meta property="og:title" content="EcoCampus 3R - Sistem Informasi Bank Sampah & Ekologi Kampus" />
-    <meta property="og:description" content="Platform edukasi dan literasi pengelolaan sampah 3R kampus dengan panduan visual pemilahan material, kuis interaktif pilah cerdas, mitos vs fakta ekologi, dan timeline masa urai sampah." />
+    <meta property="og:title" content="EcoCampus 3R UNM - Sistem Informasi Bank Sampah & Ekologi Universitas Negeri Makassar" />
+    <meta property="og:description" content="Platform digital pengelolaan sampah 3R, Bank Sampah Kampus, Bursa Reuse, dan edukasi sirkularitas khusus sivitas akademika Universitas Negeri Makassar (UNM)." />
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="id_ID" />
     <meta name="twitter:card" content="summary_large_image" />
+    
+    <!-- Early suppression of noisy third-party browser extension errors (e.g. sender-wallet, metamask, etc.) -->
+    <script>
+      (function() {
+        function isWalletNoise(val) {
+          if (!val) return false;
+          try {
+            var str = typeof val === 'string' ? val : (typeof val === 'object' ? JSON.stringify(val) : String(val));
+            if (!str) return false;
+            var lower = str.toLowerCase();
+            if (
+              lower.includes('sender-wallet') ||
+              lower.includes('sender_getproviderstate') ||
+              lower.includes('sender:') ||
+              lower.includes('no account exist') ||
+              lower.includes('sender_') ||
+              lower.includes('wallet-providerresult') ||
+              lower.includes('failed to get initial state')
+            ) {
+              return true;
+            }
+          } catch (_) {}
+          return false;
+        }
+
+        function checkArgs(args) {
+          if (!args) return false;
+          for (var i = 0; i < args.length; i++) {
+            if (isWalletNoise(args[i])) return true;
+          }
+          return false;
+        }
+
+        var origConsoleError = console.error;
+        console.error = function() {
+          if (checkArgs(arguments)) return;
+          origConsoleError.apply(console, arguments);
+        };
+
+        var origConsoleWarn = console.warn;
+        console.warn = function() {
+          if (checkArgs(arguments)) return;
+          origConsoleWarn.apply(console, arguments);
+        };
+
+        var origConsoleLog = console.log;
+        console.log = function() {
+          if (checkArgs(arguments)) return;
+          origConsoleLog.apply(console, arguments);
+        };
+
+        window.addEventListener('error', function(event) {
+          if (isWalletNoise(event.message) || isWalletNoise(event.filename) || isWalletNoise(event.error)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isWalletNoise(event.reason?.message) || isWalletNoise(event.reason)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+
+        // Also prevent noisy message events posted by sender-wallet extension into the iframe
+        window.addEventListener('message', function(event) {
+          if (isWalletNoise(event.data)) {
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
     
     <!-- Schema.org Structured Data (JSON-LD) sesuai Analisis Arsitektur Dokumen Web -->
     <script type="application/ld+json">
