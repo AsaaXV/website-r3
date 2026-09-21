@@ -146,7 +146,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <div 
                   onClick={() => setActiveTab('gamification')}
                   className="flex items-center gap-1 text-emerald-700 font-bold cursor-pointer hover:text-emerald-800"
-                  title="Saldo Eco-Points Anda. Klik untuk tukar hadiah."
+                  title="Saldo Eco-Points Anda. Klik untuk lihat klasemen & tantangan."
                   id="eco-points-badge"
                 >
                   <Coins className="w-3.5 h-3.5 text-emerald-600" />

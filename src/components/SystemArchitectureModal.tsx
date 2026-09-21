@@ -177,7 +177,7 @@ export const SystemArchitectureModal: React.FC<SystemArchitectureModalProps> = (
                   <div className="p-3 flex items-start gap-3">
                     <span className="px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-bold shrink-0">Fase 2</span>
                     <div>
-                      <strong className="text-slate-900">Gamifikasi Berkelanjutan:</strong> Tantangan 7 Hari, poin Eco-Points, penukaran voucher, leaderboard sivitas, dan generator E-Sertifikat MBKM.
+                      <strong className="text-slate-900">Tantangan & Klasemen Berkelanjutan:</strong> Tantangan 7 Hari, akumulasi poin Eco-Points, lencana aksi hijau, dan leaderboard kompetisi antar-fakultas.
                     </div>
                   </div>
                 </div>
@@ -202,8 +202,8 @@ export const SystemArchitectureModal: React.FC<SystemArchitectureModalProps> = (
                   <div className="pt-2"><strong>2. ALUR BURSA PRELOVED & BARANG DICARI:</strong></div>
                   <div>Bursa Reuse ➔ [Pilihan A] Pasang Barang Preloved / Donasi Rp 0 + Pilih Titik Temu Aman (Safe COD Spot)</div>
                   <div>Bursa Reuse ➔ [Pilihan B] Pasang Kebutuhan di "Papan Dicari" (Request Board) ➔ Rekan Mahasiswa Chat / Menanggapi</div>
-                  <div className="pt-2"><strong>3. ALUR GAMIFIKASI 7 HARI & E-SERTIKAT:</strong></div>
-                  <div>Tab Gamifikasi ➔ Ambil Tantangan Hari Ini ➔ Selesaikan Aksi Ramah Lingkungan ➔ Peroleh Eco-Points ➔ Generate E-Sertifikat Portofolio</div>
+                  <div className="pt-2"><strong>3. ALUR TANTANGAN 7 HARI & KLASEMEN FAKULTAS:</strong></div>
+                  <div>Tab Tantangan & Klasemen ➔ Ambil Tantangan Hari Ini ➔ Selesaikan Aksi Ramah Lingkungan ➔ Peroleh Eco-Points & Lencana ➔ Tingkatkan Posisi Klasemen Fakultas</div>
                   <div className="pt-2"><strong>4. ALUR PETUGAS TPST & AUDIT:</strong></div>
                   <div>Switch Role Petugas ➔ Buka Peta Rute Angkut / Verifikasi Transparansi ➔ Audit Z-Score Anomali ➔ Konfirmasi Bersih</div>
                 </div>
@@ -213,7 +213,7 @@ export const SystemArchitectureModal: React.FC<SystemArchitectureModalProps> = (
                 <div className="p-3 bg-emerald-50/50 border border-emerald-200 rounded-xl">
                   <div className="font-bold text-emerald-900 text-xs">Persona: Mahasiswa</div>
                   <div className="text-[11px] text-slate-600 mt-1">
-                    Fokus pada bursa hemat biaya kos, cari barang gratis, deteksi material sampah, dan sertifikat portofolio.
+                    Fokus pada bursa hemat biaya kos, cari barang gratis, deteksi material sampah, dan partisipasi tantangan hijau.
                   </div>
                 </div>
                 <div className="p-3 bg-blue-50/50 border border-blue-200 rounded-xl">

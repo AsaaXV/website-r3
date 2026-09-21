@@ -23,7 +23,7 @@ export const RoleSwitchModal: React.FC<RoleSwitchModalProps> = ({
       user: INITIAL_USER,
       badge: 'Mahasiswa / Nasabah 3R',
       badgeColor: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-      description: 'Akses penuh untuk setor sampah, scan YOLOv8, lihat saldo Eco-Points, dan tukar voucher kantin.',
+      description: 'Akses penuh untuk setor sampah, scan YOLOv8, lihat saldo Eco-Points, tantangan 7 hari, dan bursa reuse.',
     },
     {
       user: OPERATOR_USER,

@@ -59,7 +59,7 @@ export const INITIAL_SURVEYS: Survey[] = [
         options: [
           'Bursa Reuse Kampus (Jual/Hibah/Cari)',
           'Scan AI Material & Klasifikasi Sampah',
-          'Gamifikasi & Tantangan 7 Hari Hijau',
+          'Tantangan 7 Hari & Klasemen Hijau',
           'Buku Kas Digital & Audit TPST',
           'Edukasi Pilah 3R & Jejak Karbon',
         ],

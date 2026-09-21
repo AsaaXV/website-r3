@@ -497,9 +497,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <button
             onClick={() => handleNavigate('gamification')}
-            className="w-full mt-4 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1"
+            className="w-full mt-4 py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors flex items-center justify-center gap-1 cursor-pointer"
           >
-            <span>Lihat Klasemen Lengkap & Hadiah</span>
+            <span>Buka Tantangan & Klasemen Lengkap</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </div>

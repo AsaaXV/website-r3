@@ -27,6 +27,7 @@ import {
 import { PRESET_DETECTIONS, WASTE_CATEGORIES } from '../data/mockData';
 import { DetectionResult, WasteCategoryType, UpcyclingTip, ScanHistoryItem, UserProfile } from '../types';
 import { getUserScanHistory, saveUserScanHistory, clearUserScanHistory } from '../utils/storage';
+import { compressImage, formatBytes, CompressionResult } from '../utils/imageCompression';
 
 interface AIScannerViewProps {
   currentUser?: UserProfile;
@@ -163,6 +164,7 @@ export const AIScannerView: React.FC<AIScannerViewProps> = ({
   const [isLiveCamera, setIsLiveCamera] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [customImage, setCustomImage] = useState<string | null>(null);
+  const [compressionInfo, setCompressionInfo] = useState<CompressionResult | null>(null);
   const [detection, setDetection] = useState<DetectionResult>(PRESET_DETECTIONS[0].result);
   const [showUpcyclingTips, setShowUpcyclingTips] = useState<boolean>(true);
   const [scanHistory, setScanHistory] = useState<ScanHistoryItem[]>(() =>
@@ -232,6 +234,7 @@ export const AIScannerView: React.FC<AIScannerViewProps> = ({
     stopCamera();
     setSelectedPresetId(id);
     setCustomImage(null);
+    setCompressionInfo(null);
     const item = PRESET_DETECTIONS.find((p) => p.id === id);
     if (item) {
       triggerScanAnimation(item.result, item.sampleImg);
@@ -248,20 +251,29 @@ export const AIScannerView: React.FC<AIScannerViewProps> = ({
     }, 600);
   };
 
-  // Handle custom image upload
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle custom image upload with client-side compression
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       stopCamera();
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const url = event.target?.result as string;
-        setCustomImage(url);
-        // Smart heuristic determination
+      try {
+        const compressed = await compressImage(file, 1280, 1280, 0.85);
+        setCustomImage(compressed.dataUrl);
+        setCompressionInfo(compressed);
         const matched = PRESET_DETECTIONS[0].result;
-        triggerScanAnimation(matched, url);
-      };
-      reader.readAsDataURL(file);
+        triggerScanAnimation(matched, compressed.dataUrl);
+      } catch (err) {
+        // Fallback to FileReader if compression fails
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const url = event.target?.result as string;
+          setCustomImage(url);
+          setCompressionInfo(null);
+          const matched = PRESET_DETECTIONS[0].result;
+          triggerScanAnimation(matched, url);
+        };
+        reader.readAsDataURL(file);
+      }
     }
   };
 
@@ -465,6 +477,13 @@ export const AIScannerView: React.FC<AIScannerViewProps> = ({
                     className="hidden"
                   />
                 </label>
+
+                {compressionInfo && (
+                  <div className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-emerald-950/80 border border-emerald-700/60 text-[11px] text-emerald-300">
+                    <Zap className="w-3 h-3 text-amber-300" />
+                    <span>Kompresi AI: Hemat {compressionInfo.savedPercentage}% ({formatBytes(compressionInfo.originalSizeBytes)} ➔ {formatBytes(compressionInfo.compressedSizeBytes)})</span>
+                  </div>
+                )}
               </div>
 
               {cameraError && (

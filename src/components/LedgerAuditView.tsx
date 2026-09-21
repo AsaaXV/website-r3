@@ -13,15 +13,25 @@ import {
   Lock,
   RefreshCw,
   Clock,
-  UserCheck
+  UserCheck,
+  FileSpreadsheet,
+  Printer,
+  Download,
+  PlusCircle,
+  Scale,
+  Sparkles,
+  MapPin,
+  X,
 } from 'lucide-react';
 import { LedgerTransaction, UserProfile } from '../types';
+import { exportLedgerToCSV, printOfficialAuditReport } from '../utils/exportReport';
 
 interface LedgerAuditViewProps {
   currentUser: UserProfile;
   transactions: LedgerTransaction[];
   onVerifyTransaction: (txId: string) => void;
   onRejectTransaction: (txId: string) => void;
+  onRecordDeposit?: (newTx: LedgerTransaction) => void;
 }
 
 export const LedgerAuditView: React.FC<LedgerAuditViewProps> = ({
@@ -29,10 +39,92 @@ export const LedgerAuditView: React.FC<LedgerAuditViewProps> = ({
   transactions,
   onVerifyTransaction,
   onRejectTransaction,
+  onRecordDeposit,
 }) => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'flagged' | 'verified'>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedTx, setSelectedTx] = useState<LedgerTransaction | null>(null);
+
+  // New Deposit Modal State
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [depositUserName, setDepositUserName] = useState(currentUser.name);
+  const [depositFaculty, setDepositFaculty] = useState(currentUser.faculty || 'Fakultas Teknik');
+  const [depositDropPoint, setDepositDropPoint] = useState('TPS Terpadu Kampus Parangtambung');
+  const [depositCategory, setDepositCategory] = useState<'Plastik PET' | 'Kertas & Karton' | 'Kaleng Logam' | 'Kaca' | 'Elektronik'>('Plastik PET');
+  const [depositWeightKg, setDepositWeightKg] = useState<number>(1.5);
+  const [depositNotes, setDepositNotes] = useState('');
+
+  const RATE_PER_KG: Record<string, number> = {
+    'Plastik PET': 50,
+    'Kertas & Karton': 40,
+    'Kaleng Logam': 80,
+    'Kaca': 30,
+    'Elektronik': 100,
+  };
+
+  const calculatedPoints = Math.round(depositWeightKg * (RATE_PER_KG[depositCategory] || 50));
+
+  const handleCreateDeposit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (depositWeightKg <= 0) return;
+
+    // Detect anomaly if weight is extraordinarily high (> 12kg single deposit)
+    const isAnomalous = depositWeightKg >= 12;
+    const zScore = isAnomalous ? Number((3.1 + Math.random() * 0.8).toFixed(2)) : Number((0.6 + Math.random() * 0.8).toFixed(2));
+    const randomHash = '0x' + Array.from({ length: 32 }, () => Math.floor(Math.random() * 16).toString(16)).join('');
+
+    // Map to system WasteCategoryType ('organik' | 'kertas' | 'plastik' | 'khusus')
+    const categoryMapping: Record<string, 'organik' | 'kertas' | 'plastik' | 'khusus'> = {
+      'Plastik PET': 'plastik',
+      'Kertas & Karton': 'kertas',
+      'Kaleng Logam': 'khusus',
+      'Kaca': 'khusus',
+      'Elektronik': 'khusus',
+    };
+    const mappedCategory = categoryMapping[depositCategory] || 'plastik';
+
+    const newTx: LedgerTransaction = {
+      id: `TX-${Date.now().toString().slice(-6)}`,
+      timestamp: new Date().toLocaleDateString('id-ID', {
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      }),
+      userId: currentUser.id,
+      userName: depositUserName,
+      faculty: depositFaculty,
+      dropPointId: 'dp_' + depositDropPoint.toLowerCase().slice(0, 12).replace(/[^a-z0-9]/g, '_'),
+      dropPointName: depositDropPoint,
+      items: [
+        {
+          categoryId: mappedCategory,
+          categoryName: depositCategory,
+          materialName: depositCategory,
+          weightKg: depositWeightKg,
+          pointsEarned: calculatedPoints,
+          xpEarned: calculatedPoints * 2,
+          co2SavedKg: Number((depositWeightKg * 2.5).toFixed(2)),
+        },
+      ],
+      totalWeightKg: depositWeightKg,
+      totalPoints: calculatedPoints,
+      totalXp: calculatedPoints * 2,
+      zScore: zScore,
+      status: isAnomalous ? 'flagged' : 'verified',
+      flagReason: isAnomalous ? `Bobot ${depositWeightKg} kg melebihi batas statistik wajar (Z = ${zScore}σ > 3.0σ). Memerlukan audit fisik operator.` : undefined,
+      verifiedBy: isAnomalous ? undefined : currentUser.name + ' (Petugas TPS)',
+      hash: randomHash,
+    };
+
+    if (onRecordDeposit) {
+      onRecordDeposit(newTx);
+    }
+
+    setIsDepositModalOpen(false);
+    setSelectedTx(newTx);
+  };
 
   const filtered = transactions.filter((t) => {
     if (filterStatus !== 'all' && t.status !== filterStatus) return false;
@@ -48,6 +140,7 @@ export const LedgerAuditView: React.FC<LedgerAuditViewProps> = ({
 
   const flaggedCount = transactions.filter((t) => t.status === 'flagged').length;
   const verifiedCount = transactions.filter((t) => t.status === 'verified').length;
+
 
   return (
     <div className="space-y-6 pb-12">
@@ -135,21 +228,53 @@ export const LedgerAuditView: React.FC<LedgerAuditViewProps> = ({
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 self-start sm:self-auto">
-          <span className="text-xs text-slate-500 font-medium">Status:</span>
-          {(['all', 'flagged', 'verified'] as const).map((st) => (
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs text-slate-500 font-medium">Status:</span>
+            {(['all', 'flagged', 'verified'] as const).map((st) => (
+              <button
+                key={st}
+                onClick={() => setFilterStatus(st)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  filterStatus === st
+                    ? 'bg-slate-900 text-white shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {st === 'all' ? 'Semua' : st === 'flagged' ? 'Anomali' : 'Terverifikasi'}
+              </button>
+            ))}
+          </div>
+
+          <div className="h-4 w-px bg-slate-200 hidden sm:block mx-1" />
+
+          {/* Export & Action Buttons */}
+          <div className="flex items-center gap-1.5">
             <button
-              key={st}
-              onClick={() => setFilterStatus(st)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all ${
-                filterStatus === st
-                  ? 'bg-slate-900 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
+              onClick={() => setIsDepositModalOpen(true)}
+              className="flex items-center gap-1 px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-xs cursor-pointer"
+              title="Input penimbangan sampah fisik nasabah"
             >
-              {st === 'all' ? 'Semua' : st === 'flagged' ? 'Anomali' : 'Terverifikasi'}
+              <PlusCircle className="w-3.5 h-3.5" />
+              <span>+ Catat Setoran TPS</span>
             </button>
-          ))}
+            <button
+              onClick={() => exportLedgerToCSV(filtered, `Buku-Kas-EcoCampus-UNM-${filterStatus}.csv`)}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 text-xs font-bold transition cursor-pointer"
+              title="Unduh data dalam format CSV/Excel"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Ekspor Excel</span>
+            </button>
+            <button
+              onClick={() => printOfficialAuditReport(filtered, { operatorName: currentUser.name })}
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 text-xs font-bold transition cursor-pointer"
+              title="Cetak format laporan resmi / Simpan PDF"
+            >
+              <Printer className="w-3.5 h-3.5 text-slate-600" />
+              <span>Cetak PDF</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -342,6 +467,152 @@ export const LedgerAuditView: React.FC<LedgerAuditViewProps> = ({
           </div>
         )}
       </div>
+
+      {/* Record Deposit Modal for TPS Operator */}
+      {isDepositModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
+          <div className="w-full max-w-lg rounded-3xl bg-white border border-slate-200 p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
+                  <Scale className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-900 text-base">
+                    Pencatatan Penimbangan Sampah TPS
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Input data penimbangan fisik nasabah & minting Eco-Points
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsDepositModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDeposit} className="space-y-3.5 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Nama Nasabah / Mahasiswa</label>
+                  <input
+                    type="text"
+                    required
+                    value={depositUserName}
+                    onChange={(e) => setDepositUserName(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-emerald-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Fakultas / Unit</label>
+                  <select
+                    value={depositFaculty}
+                    onChange={(e) => setDepositFaculty(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-emerald-500"
+                  >
+                    <option value="Fakultas Teknik">Fakultas Teknik</option>
+                    <option value="FMIPA">FMIPA</option>
+                    <option value="FBS">FBS</option>
+                    <option value="FIS-H">FIS-H</option>
+                    <option value="FIP">FIP</option>
+                    <option value="FIK">FIK</option>
+                    <option value="FEB">FEB</option>
+                    <option value="FPSI">FPSI</option>
+                    <option value="Pascasarjana">Pascasarjana</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-bold text-slate-700">Titik Fasilitas TPS Kampus</label>
+                <select
+                  value={depositDropPoint}
+                  onChange={(e) => setDepositDropPoint(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-emerald-500"
+                >
+                  <option value="TPS Terpadu Kampus Parangtambung">TPS Terpadu Kampus Parangtambung (FT/FMIPA)</option>
+                  <option value="Bank Sampah Menara Pinisi Lt. 1">Bank Sampah Menara Pinisi Lt. 1 (Gunungsari)</option>
+                  <option value="Drop Point Gedung PKM UNM">Drop Point Gedung PKM UNM Parangtambung</option>
+                  <option value="TPS FMIPA UNM Samping Lab Kimia">TPS FMIPA UNM Samping Lab Kimia</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Kategori Material Pilah</label>
+                  <select
+                    value={depositCategory}
+                    onChange={(e) => setDepositCategory(e.target.value as any)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-emerald-500"
+                  >
+                    <option value="Plastik PET">Plastik PET (Botol/Gelas Bersih) - 50 Pts/kg</option>
+                    <option value="Kertas & Karton">Kertas Diktat & Kardus - 40 Pts/kg</option>
+                    <option value="Kaleng Logam">Kaleng Aluminium & Besi - 80 Pts/kg</option>
+                    <option value="Kaca">Botol Beling / Kaca - 30 Pts/kg</option>
+                    <option value="Elektronik">E-Waste / Elektronik Rusak - 100 Pts/kg</option>
+                  </select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="font-bold text-slate-700">Bobot Timbangan (kg)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0.1"
+                    max="100"
+                    required
+                    value={depositWeightKg}
+                    onChange={(e) => setDepositWeightKg(parseFloat(e.target.value) || 0)}
+                    className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 font-mono font-bold focus:outline-emerald-500"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 flex items-center justify-between">
+                <div>
+                  <div className="font-bold text-emerald-950">Kalkulasi Eco-Points Otomatis:</div>
+                  <div className="text-[11px] text-emerald-700">
+                    {depositWeightKg} kg × {RATE_PER_KG[depositCategory]} pts/kg
+                  </div>
+                </div>
+                <div className="text-xl font-black text-emerald-700 font-mono">
+                  +{calculatedPoints} Pts
+                </div>
+              </div>
+
+              {depositWeightKg >= 12 && (
+                <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>
+                    Perhatian: Bobot di atas 12 kg akan otomatis berstatus <strong>Anomali (Flagged)</strong> untuk audit operator guna mencegah manipulasi.
+                  </span>
+                </div>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsDepositModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-bold"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-black flex items-center gap-1.5 shadow-md shadow-emerald-600/30 cursor-pointer"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>Simpan Transaksi & Minting Poin</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

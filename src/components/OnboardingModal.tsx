@@ -99,20 +99,20 @@ const TOUR_STEPS: TourStep[] = [
     actionText: 'Buka Peta Fasilitas',
   },
   {
-    title: 'Tantangan 7 Hari & E-Sertifikat Hijau',
-    badge: 'Gamifikasi & Portofolio MBKM',
+    title: 'Tantangan 7 Hari & Klasemen Fakultas',
+    badge: 'Tantangan & Aksi Berkelanjutan',
     description:
-      'Bentuk kebiasaan berkelanjutan dengan menyelesaikan micro-challenge harian dan unduh sertifikat resmi untuk portofolio kampus.',
+      'Bentuk kebiasaan berkelanjutan dengan menyelesaikan micro-challenge harian serta perkuat reputasi fakultas Anda di papan klasemen.',
     icon: Award,
     iconColor: 'text-purple-600',
     bgColor: 'bg-purple-50 border-purple-200',
     keyPoints: [
       'Micro-challenge: Bawa tumbler, tolak kantong kresek, hingga donasi barang ke bursa reuse.',
-      'Peroleh Eco-Points dan tukarkan dengan voucher kantin, kuota internet, atau merchandise.',
-      'E-Sertifikat Partisipasi Hijau yang dapat dicetak dan dimasukkan ke berkas Merdeka Belajar.',
+      'Peroleh Eco-Points dan lencana keaktifan pilah sampah terverifikasi.',
+      'Kompetisi antar-fakultas untuk mendorong budaya zero-waste di seluruh sivitas akademika.',
     ],
     tabTarget: 'gamification',
-    actionText: 'Buka Gamifikasi',
+    actionText: 'Buka Tantangan & Klasemen',
   },
 ];
 

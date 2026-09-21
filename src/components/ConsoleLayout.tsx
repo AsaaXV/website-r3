@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   LayoutDashboard,
   FileText,
+  TrendingDown,
 } from 'lucide-react';
 import { UserProfile, ReuseItem } from '../types';
 import { ConsoleRightSidebar } from './ConsoleRightSidebar';
@@ -101,40 +102,47 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
   const navMenuItems = [
     {
       id: 'dashboard',
-      label: 'Beranda & Aksi',
+      label: 'Pusat 3R Kampus',
       icon: Recycle,
       badge: null,
     },
     {
+      id: 'reduce',
+      label: '1. Aksi Reduce',
+      icon: TrendingDown,
+      badge: 'Cegah Sampah',
+      badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300',
+    },
+    {
       id: 'komunitas',
-      label: 'Bursa Reuse',
+      label: '2. Bursa Reuse',
       icon: ShoppingBag,
       badge: 'Preloved',
       badgeColor: 'bg-amber-100 text-amber-800 dark:bg-amber-950/80 dark:text-amber-300',
     },
     {
       id: 'scanner',
-      label: 'Scan AI Material',
+      label: '3. Recycle AI',
       icon: Camera,
       badge: 'Gemini AI',
-      badgeColor: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300',
+      badgeColor: 'bg-sky-100 text-sky-800 dark:bg-sky-950/80 dark:text-sky-300',
     },
     {
       id: 'edukasi',
-      label: 'Edukasi 3R & Karbon',
+      label: 'Pedoman 3R & Karbon',
       icon: BookOpen,
       badge: null,
     },
     {
       id: 'gamification',
-      label: 'Gamifikasi & Hadiah',
+      label: 'Tantangan & Klasemen',
       icon: Award,
       badge: `${currentUser.ecoPoints} Pts`,
       badgeColor: 'bg-blue-100 text-blue-800 dark:bg-blue-950/80 dark:text-blue-300',
     },
     {
       id: 'ledger',
-      label: 'Buku Kas & Audit',
+      label: 'Buku Kas & Audit TPS',
       icon: ShieldCheck,
       badge: null,
     },
@@ -164,6 +172,8 @@ export const ConsoleLayout: React.FC<ConsoleLayoutProps> = ({
       setActiveTab('fasilitas');
     } else if (q.includes('edukasi') || q.includes('sampah') || q.includes('karbon') || q.includes('pedoman')) {
       setActiveTab('edukasi');
+    } else if (q.includes('tantangan') || q.includes('klasemen') || q.includes('peringkat') || q.includes('poin') || q.includes('streak') || q.includes('lencana')) {
+      setActiveTab('gamification');
     } else {
       setActiveTab('komunitas');
     }

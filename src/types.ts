@@ -113,17 +113,6 @@ export interface VRPStop {
   status: 'pending' | 'collected' | 'next';
 }
 
-export interface RewardItem {
-  id: string;
-  title: string;
-  category: 'Kantin' | 'Pulsa/Data' | 'Akademik' | 'Voucher';
-  description: string;
-  costPoints: number;
-  partner: string;
-  stock: number;
-  icon: string;
-}
-
 export interface LeaderboardUser {
   rank: number;
   id: string;
@@ -335,20 +324,6 @@ export interface AppNotification {
   linkTab?: string;
 }
 
-export interface UserCertificate {
-  certificateNumber: string;
-  userId: string;
-  recipientName: string;
-  faculty: string;
-  major: string;
-  issueDate: string;
-  totalWeightKg: number;
-  ecoPoints: number;
-  level: number;
-  verificationHash: string;
-  verificationUrl: string;
-}
-
 // ==========================================
 // DYNAMIC SURVEY SYSTEM TYPES
 // ==========================================
@@ -456,10 +431,6 @@ export interface ReuseCategory {
   updatedAt: string;
 }
 
-// ==========================================
-// OFFICIAL COMMUNITY POSTS
-// ==========================================
-
 export interface OfficialCommunityPost {
   id: string;
   title: string;
@@ -472,5 +443,60 @@ export interface OfficialCommunityPost {
   publishedAt?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ==========================================
+// 3R (REDUCE, REUSE, RECYCLE) FRAMEWORK TYPES
+// ==========================================
+
+export type R3Pillar = 'reduce' | 'reuse' | 'recycle';
+
+export type ReduceActionKey =
+  | 'tumbler'
+  | 'lunchbox'
+  | 'tote_bag'
+  | 'paperless'
+  | 'reusable_cutlery'
+  | 'digital_notes';
+
+export interface ReduceActionDefinition {
+  key: ReduceActionKey;
+  title: string;
+  category: 'Wadah Makanan & Minuman' | 'Belanja & Fotokopi' | 'Akademik & Tugas';
+  description: string;
+  pointsEarned: number;
+  xpEarned: number;
+  wastePreventedGrams: number;
+  co2PreventedGrams: number;
+  iconName: string;
+  tips: string;
+}
+
+export interface ReduceActionLog {
+  id: string;
+  userId: string;
+  actionKey: ReduceActionKey;
+  title: string;
+  pointsEarned: number;
+  xpEarned: number;
+  wastePreventedGrams: number;
+  co2PreventedGrams: number;
+  timestamp: string;
+  notes?: string;
+}
+
+export interface R3MetricsSummary {
+  // REDUCE
+  totalWastePreventedGrams: number;
+  totalReduceActionsCount: number;
+  estimatedSingleUseBottlesSaved: number;
+  // REUSE
+  totalItemsReusedCount: number;
+  totalReuseTransactionsRupiah: number;
+  // RECYCLE
+  totalWasteRecycledKg: number;
+  totalRecyclePointsEarned: number;
+  // IMPACT
+  totalCo2SavedKg: number;
 }
 

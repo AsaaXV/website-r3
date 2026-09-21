@@ -4,51 +4,35 @@ import {
   Award,
   Flame,
   Coins,
-  Gift,
   CheckCircle2,
   Lock,
   Sparkles,
-  QrCode,
-  Coffee,
-  Wifi,
-  FileText,
-  GraduationCap,
   ChevronRight,
   TrendingUp,
   Share2,
   CalendarCheck,
-  Printer,
-  Download,
   ShieldCheck,
   Check,
   Ban,
-  ShoppingBag,
-  Scan,
   Users
 } from 'lucide-react';
 import {
   INITIAL_LEADERBOARD_STUDENTS,
   FACULTY_LEADERBOARD_DATA,
-  REWARD_ITEMS
 } from '../data/mockData';
-import { UserProfile, RewardItem, DailyChallenge } from '../types';
-import { getUserChallenges, saveUserChallenges, getUserCertificate } from '../utils/storage';
+import { UserProfile, DailyChallenge } from '../types';
+import { getUserChallenges, saveUserChallenges } from '../utils/storage';
 
 interface GamificationViewProps {
   currentUser: UserProfile;
-  onRedeemReward: (reward: RewardItem) => boolean;
   onUpdateUser?: (updatedUser: UserProfile) => void;
 }
 
 export const GamificationView: React.FC<GamificationViewProps> = ({
   currentUser,
-  onRedeemReward,
   onUpdateUser,
 }) => {
-  const [activeTab, setActiveTab] = useState<'leaderboard' | 'challenges' | 'certificate' | 'faculty' | 'rewards' | 'badges'>('challenges');
-  const [selectedReward, setSelectedReward] = useState<RewardItem | null>(null);
-  const [redeemedCode, setRedeemedCode] = useState<string | null>(null);
-  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'challenges' | 'leaderboard' | 'faculty' | 'badges'>('challenges');
   const [challengeToast, setChallengeToast] = useState<string | null>(null);
 
   // Daily Micro-challenges state strictly isolated per user session (currentUser.id)
@@ -60,11 +44,6 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
   React.useEffect(() => {
     setDailyChallenges(getUserChallenges(currentUser?.id || ''));
   }, [currentUser?.id]);
-
-  // Certificate isolated per user
-  const userCertificate = React.useMemo(() => {
-    return getUserCertificate(currentUser?.id || '', currentUser);
-  }, [currentUser]);
 
   // Experience level threshold: Level * 400 XP
   const nextLevelXp = currentUser.level * 400;
@@ -112,46 +91,6 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
     showChallengeNotification(
       `Selamat! Tantangan Hari ke-${day} Selesai (+${target.rewardPoints} Eco-Points & +${target.rewardXp} XP)`
     );
-  };
-
-  const getRewardIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'Coffee':
-        return <Coffee className="w-5 h-5 text-amber-600" />;
-      case 'Wifi':
-        return <Wifi className="w-5 h-5 text-blue-600" />;
-      case 'FileText':
-        return <FileText className="w-5 h-5 text-indigo-600" />;
-      case 'GraduationCap':
-        return <GraduationCap className="w-5 h-5 text-emerald-600" />;
-      default:
-        return <Gift className="w-5 h-5 text-teal-600" />;
-    }
-  };
-
-  const handleRedeemClick = (reward: RewardItem) => {
-    setRedeemError(null);
-    if (currentUser.ecoPoints < reward.costPoints) {
-      setRedeemError(`Saldo Eco-Points Anda (${currentUser.ecoPoints}) tidak mencukupi untuk item ini (${reward.costPoints} pts).`);
-      return;
-    }
-
-    const success = onRedeemReward(reward);
-    if (success) {
-      const randomCode = `ECO-${reward.category.slice(0, 3).toUpperCase()}-${Math.floor(100000 + Math.random() * 900000)}`;
-      setRedeemedCode(randomCode);
-      setSelectedReward(reward);
-
-      confetti({
-        particleCount: 80,
-        spread: 70,
-        origin: { y: 0.6 },
-      });
-    }
-  };
-
-  const handlePrintCertificate = () => {
-    window.print();
   };
 
   return (
@@ -235,10 +174,8 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
       <div className="flex border-b border-slate-200 overflow-x-auto gap-2 pb-1 scrollbar-none">
         {[
           { id: 'challenges', label: 'Tantangan 7 Hari Hijau' },
-          { id: 'certificate', label: 'E-Sertifikat Partisipasi' },
           { id: 'leaderboard', label: 'Klasemen Mahasiswa' },
           { id: 'faculty', label: 'Kompetisi Antar-Fakultas' },
-          { id: 'rewards', label: 'Katalog Hadiah & Insentif' },
           { id: 'badges', label: 'Lencana & Badges' },
         ].map((tab) => (
           <button
@@ -254,12 +191,6 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
           </button>
         ))}
       </div>
-
-      {redeemError && (
-        <div className="p-3.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 font-medium">
-          {redeemError}
-        </div>
-      )}
 
       {/* TAB: TANTANGAN 7 HARI HIJAU (MICRO-CHALLENGE) */}
       {activeTab === 'challenges' && (
@@ -359,126 +290,6 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
                   </div>
                 );
               })}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* TAB: E-SERTIFIKAT PARTISIPASI HIJAU */}
-      {activeTab === 'certificate' && (
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-5 sm:p-6 shadow-xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
-              <div>
-                <h3 className="text-base sm:text-lg font-black text-slate-900">
-                  E-Sertifikat Kontribusi Lingkungan Digital
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Bukti portofolio partisipasi resmi sivitas akademika dalam inisiatif reduksi sampah dan ekonomi sirkular kampus.
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handlePrintCertificate}
-                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
-                >
-                  <Printer className="w-4 h-4 text-emerald-400" />
-                  <span>Cetak / Unduh PDF</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Official Digital Certificate Canvas */}
-            <div className="mt-6 max-w-3xl mx-auto p-8 sm:p-10 rounded-3xl bg-gradient-to-br from-emerald-950 via-teal-950 to-slate-950 text-white border-4 border-amber-400/80 shadow-2xl relative overflow-hidden">
-              {/* Decorative Corner Filigrees */}
-              <div className="absolute top-0 left-0 w-24 h-24 border-t-4 border-l-4 border-amber-400/70 rounded-tl-3xl m-3 pointer-events-none" />
-              <div className="absolute top-0 right-0 w-24 h-24 border-t-4 border-r-4 border-amber-400/70 rounded-tr-3xl m-3 pointer-events-none" />
-              <div className="absolute bottom-0 left-0 w-24 h-24 border-b-4 border-l-4 border-amber-400/70 rounded-bl-3xl m-3 pointer-events-none" />
-              <div className="absolute bottom-0 right-0 w-24 h-24 border-b-4 border-r-4 border-amber-400/70 rounded-br-3xl m-3 pointer-events-none" />
-
-              {/* Seal and Header */}
-              <div className="text-center space-y-2 relative z-10">
-                <div className="w-16 h-16 rounded-full bg-amber-400 text-amber-950 mx-auto flex items-center justify-center font-black shadow-lg ring-4 ring-amber-400/40">
-                  <Award className="w-9 h-9" />
-                </div>
-
-                <div className="text-xs uppercase tracking-widest text-amber-300 font-bold">
-                  UNIVERSITAS NEGERI MAKASSAR • ECO-CAMPUS 3R UNM INITIATIVE
-                </div>
-                <h1 className="text-xl sm:text-3xl font-black tracking-tight text-white uppercase font-serif">
-                  Sertifikat Penghargaan Sirkular
-                </h1>
-                <p className="text-xs text-emerald-200/90 max-w-lg mx-auto">
-                  Diberikan sebagai pengakuan dedikasi nyata dalam pemilahan sampah di lingkungan kampus UNM (Gunungsari & Parangtambung) dan ekonomi sirkular berkelanjutan.
-                </p>
-              </div>
-
-              {/* Recipient Information */}
-              <div className="my-8 text-center space-y-1 relative z-10 border-y border-amber-400/30 py-6">
-                <div className="text-[11px] text-slate-300 uppercase tracking-wider font-semibold">
-                  Diberikan Secara Bangga Kepada:
-                </div>
-                <div className="text-2xl sm:text-3xl font-black text-amber-300 tracking-wide">
-                  {currentUser.name}
-                </div>
-                <div className="text-xs text-slate-300">
-                  {currentUser.email} • {currentUser.faculty}
-                </div>
-                <div className="inline-block mt-2 px-3 py-1 rounded-full bg-emerald-800/80 border border-emerald-400/40 text-[11px] font-bold text-emerald-200">
-                  Peringkat Penggerak: Level {currentUser.level} ({currentUser.ecoPoints} Poin Terakumulasi)
-                </div>
-              </div>
-
-              {/* Achievements Grid */}
-              <div className="grid grid-cols-3 gap-3 text-center my-6 relative z-10">
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
-                  <div className="text-[10px] text-slate-300 uppercase">Total Setor Sampah</div>
-                  <div className="text-lg font-black text-white mt-0.5">
-                    {currentUser.totalWeightDepositedKg || 38.5} <span className="text-xs font-normal">kg</span>
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
-                  <div className="text-[10px] text-slate-300 uppercase">Cegah Karbon CO₂e</div>
-                  <div className="text-lg font-black text-emerald-400 mt-0.5">
-                    {Math.round((currentUser.totalWeightDepositedKg || 38.5) * 1.8)} <span className="text-xs font-normal">kg</span>
-                  </div>
-                </div>
-
-                <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
-                  <div className="text-[10px] text-slate-300 uppercase">Status Validasi</div>
-                  <div className="text-xs font-black text-amber-300 mt-1 flex items-center justify-center gap-1">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>Terverifikasi</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer: Signatures and QR Code */}
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6 border-t border-white/10 relative z-10 text-xs">
-                <div className="flex items-center gap-3">
-                  <div className="w-16 h-16 bg-white p-1 rounded-lg shadow-inner">
-                    <QrCode className="w-full h-full text-slate-900" />
-                  </div>
-                  <div className="text-[10px] text-slate-300 space-y-0.5">
-                    <div className="font-mono font-bold text-white">
-                      ID: ECO-UNM-{currentUser.id.slice(-6).toUpperCase()}-2026
-                    </div>
-                    <div>Diterbitkan di Universitas Negeri Makassar (UNM)</div>
-                    <div>Status: Resmi & Berlaku Kampus</div>
-                  </div>
-                </div>
-
-                <div className="text-center sm:text-right">
-                  <div className="font-serif italic text-amber-300 text-sm">
-                    Koordinator EcoCampus 3R
-                  </div>
-                  <div className="text-[10px] text-slate-300 mt-0.5">
-                    UPT Pengelolaan Lingkungan & Kampus Hijau
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
         </div>
@@ -607,77 +418,6 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
         </div>
       )}
 
-      {/* TAB: KATALOG HADIAH & INSENTIF */}
-      {activeTab === 'rewards' && (
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
-            <div>
-              <h3 className="font-bold text-slate-900 text-base">Tukarkan Eco-Points dengan Manfaat Nyata</h3>
-              <p className="text-xs text-slate-500">
-                Poin diperoleh dari setoran pilah sampah, scan AI material, dan aktivitas sirkular
-              </p>
-            </div>
-            <div className="text-xs font-bold text-amber-700 bg-amber-50 px-3 py-1 rounded-lg border border-amber-200 flex items-center gap-1.5 self-start sm:self-auto">
-              <Coins className="w-4 h-4 text-amber-600" />
-              <span>Saldo Anda: {currentUser.ecoPoints.toLocaleString('id-ID')} pts</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
-            {REWARD_ITEMS.map((reward) => {
-              const canAfford = currentUser.ecoPoints >= reward.costPoints;
-              return (
-                <div
-                  key={reward.id}
-                  className="p-4 rounded-xl border border-slate-200 bg-white hover:border-emerald-300 transition-all flex flex-col justify-between shadow-2xs"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center">
-                        {getRewardIcon(reward.icon)}
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700">
-                        {reward.category}
-                      </span>
-                    </div>
-
-                    <h4 className="font-bold text-slate-900 text-xs sm:text-sm">
-                      {reward.title}
-                    </h4>
-                    <p className="text-[11px] text-slate-500 leading-relaxed">
-                      {reward.description}
-                    </p>
-
-                    <div className="text-[10px] text-slate-400">
-                      Partner: <strong className="text-slate-600">{reward.partner}</strong>
-                    </div>
-                  </div>
-
-                  <div className="pt-3 mt-3 border-t border-slate-100 flex items-center justify-between">
-                    <div className="text-xs font-black text-amber-600 flex items-center gap-1">
-                      <Coins className="w-3.5 h-3.5" />
-                      <span>{reward.costPoints} pts</span>
-                    </div>
-
-                    <button
-                      onClick={() => handleRedeemClick(reward)}
-                      disabled={!canAfford}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                        canAfford
-                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                          : 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                      }`}
-                    >
-                      {canAfford ? 'Tukarkan' : 'Poin Kurang'}
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
       {/* TAB: LENCANA & BADGES */}
       {activeTab === 'badges' && (
         <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-4">
@@ -724,45 +464,6 @@ export const GamificationView: React.FC<GamificationViewProps> = ({
                 Progres: {currentUser.totalWeightDepositedKg || 38.5} / 100 kg
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* Redemption Coupon Voucher Modal */}
-      {selectedReward && redeemedCode && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 text-center space-y-4 shadow-2xl border border-slate-200">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto shadow-inner">
-              <CheckCircle2 className="w-7 h-7" />
-            </div>
-
-            <div>
-              <h3 className="text-lg font-black text-slate-900">Voucher Berhasil Ditukar!</h3>
-              <p className="text-xs text-slate-500 mt-0.5">{selectedReward.title}</p>
-            </div>
-
-            {/* QR / Barcode Simulation */}
-            <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl space-y-2">
-              <div className="w-28 h-28 bg-white border border-slate-300 mx-auto rounded-lg flex items-center justify-center shadow-2xs">
-                <QrCode className="w-20 h-20 text-slate-900" />
-              </div>
-              <div className="font-mono text-sm font-black text-slate-900 tracking-wider">
-                {redeemedCode}
-              </div>
-              <p className="text-[10px] text-slate-400">
-                Tunjukkan kode QR ini ke kasir {selectedReward.partner}
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                setSelectedReward(null);
-                setRedeemedCode(null);
-              }}
-              className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer"
-            >
-              Selesai & Simpan Voucher
-            </button>
           </div>
         </div>
       )}

@@ -7,8 +7,12 @@ import {
   ChatThread,
   ChatMessage,
   AppNotification,
-  UserCertificate,
   PickupRequest,
+  ReduceActionKey,
+  ReduceActionDefinition,
+  ReduceActionLog,
+  R3MetricsSummary,
+  LedgerTransaction,
 } from '../types';
 import {
   REUSE_ITEMS,
@@ -17,6 +21,7 @@ import {
   ADMIN_USER,
   INITIAL_CHAT_THREADS,
   DEMO_ACCOUNTS,
+  INITIAL_LEDGER_TRANSACTIONS,
 } from '../data/mockData';
 import { DEV_ACCOUNT_PROFILE } from './authAccounts';
 
@@ -27,6 +32,8 @@ const STORAGE_KEYS = {
   CHALLENGES: 'ecocampus_daily_challenges_v2',
   USER_PROFILE: 'ecocampus_user_profile_v2',
   CHAT_THREADS_PREFIX: 'ecocampus_chat_threads_v4_',
+  TRANSACTIONS: 'ecocampus_ledger_transactions_v2',
+  REDUCE_ACTIONS_PREFIX: 'ecocampus_reduce_actions_v1_',
 };
 
 export function sanitizeUserId(userId?: string): string {
@@ -477,50 +484,6 @@ export function clearUserScanHistory(userId: string): void {
     localStorage.setItem(key, JSON.stringify([]));
   } catch (e) {
     console.error('Error clearing scan history for', userId, e);
-  }
-}
-
-// --- Official Certificates (Isolated per user) ---
-
-export function getUserCertificate(userId: string, profile: UserProfile): UserCertificate {
-  const sanitized = sanitizeUserId(userId);
-  const certKey = `ecocampus_certificate_${sanitized}`;
-  try {
-    const saved = localStorage.getItem(certKey);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed && parsed.certificateNumber) return parsed;
-    }
-  } catch (e) {
-    console.error(e);
-  }
-
-  const shortCode = (sanitized || 'USR').replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase();
-  const cert: UserCertificate = {
-    certificateNumber: `UNM-EC3R-${shortCode}-2026`,
-    userId: profile.id || userId,
-    recipientName: profile.name || 'Sivitas Akademika UNM',
-    faculty: profile.faculty || 'Universitas Negeri Makassar',
-    major: profile.major || 'Program Kampus Hijau Parangtambung',
-    issueDate: profile.lastDepositDate || '11 September 2026',
-    totalWeightKg: profile.totalWeightDepositedKg || 0,
-    ecoPoints: profile.ecoPoints || 0,
-    level: profile.level || 1,
-    verificationHash: `SHA256-UNM-${shortCode}-${(profile.ecoPoints || 0) * 13 + 7041}`,
-    verificationUrl: `https://ecocampus.unm.ac.id/verify/${sanitized}`,
-  };
-
-  saveUserCertificate(userId, cert);
-  return cert;
-}
-
-export function saveUserCertificate(userId: string, cert: UserCertificate): void {
-  const sanitized = sanitizeUserId(userId);
-  const certKey = `ecocampus_certificate_${sanitized}`;
-  try {
-    localStorage.setItem(certKey, JSON.stringify(cert));
-  } catch (e) {
-    console.error(e);
   }
 }
 
@@ -1154,4 +1117,272 @@ export function deliverMessageToRecipient(
   } catch (e) {
     console.error('Error delivering message to recipient mailbox:', e);
   }
+}
+
+// ==========================================
+// 3R (REDUCE, REUSE, RECYCLE) STORAGE ENGINE
+// ==========================================
+
+export const REDUCE_ACTION_DEFINITIONS: ReduceActionDefinition[] = [
+  {
+    key: 'tumbler',
+    title: 'Bawa Tumbler Pribadi',
+    category: 'Wadah Makanan & Minuman',
+    description: 'Mengisi ulang air minum di kampus tanpa membeli air mineral kemasan plastik (AMDK) sekali pakai.',
+    pointsEarned: 10,
+    xpEarned: 15,
+    wastePreventedGrams: 25,
+    co2PreventedGrams: 80,
+    iconName: 'Droplet',
+    tips: 'Isi ulang gratis di Water Station Menara Pinisi & Gedung Laboratorium Terpadu Parangtambung.',
+  },
+  {
+    key: 'lunchbox',
+    title: 'Wadah Makan Sendiri (Mistik)',
+    category: 'Wadah Makanan & Minuman',
+    description: 'Membawa bekal atau wadah sendiri saat jajan di kantin kampus, menolak styrofoam & bungkus plastik minyak.',
+    pointsEarned: 15,
+    xpEarned: 20,
+    wastePreventedGrams: 35,
+    co2PreventedGrams: 110,
+    iconName: 'Utensils',
+    tips: 'Mitra Kantin Hijau UNM memberikan porsi ekstra atau potongan harga bagi yang membawa wadah makan sendiri.',
+  },
+  {
+    key: 'tote_bag',
+    title: 'Tolak Kresek / Bawa Tote Bag',
+    category: 'Belanja & Fotokopi',
+    description: 'Menolak kantong plastik sekali pakai saat fotokopi modul, beli ATK, atau berbelanja di sekitar kampus.',
+    pointsEarned: 10,
+    xpEarned: 10,
+    wastePreventedGrams: 15,
+    co2PreventedGrams: 50,
+    iconName: 'ShoppingBag',
+    tips: 'Selalu selipkan 1 tas belanja kain lipat di ransel kuliahmu sebelum berangkat ke kampus.',
+  },
+  {
+    key: 'paperless',
+    title: 'Tugas Paperless & LMS SYAM-OK',
+    category: 'Akademik & Tugas',
+    description: 'Mengumpulkan tugas, makalah, atau laporan praktikum secara digital di SYAM-OK tanpa cetak kertas HVS.',
+    pointsEarned: 10,
+    xpEarned: 15,
+    wastePreventedGrams: 50,
+    co2PreventedGrams: 65,
+    iconName: 'FileText',
+    tips: 'Gunakan format PDF terkompresi dan mintalah review digital kepada dosen pengampu.',
+  },
+  {
+    key: 'reusable_cutlery',
+    title: 'Sendok & Sedotan Guna Ulang',
+    category: 'Wadah Makanan & Minuman',
+    description: 'Menolak sedotan plastik dan sendok plastik sekali pakai saat menikmati minuman es atau jajanan kampus.',
+    pointsEarned: 5,
+    xpEarned: 10,
+    wastePreventedGrams: 8,
+    co2PreventedGrams: 25,
+    iconName: 'Sparkles',
+    tips: 'Bawa sedotan stainless/bambu dan sendok travel ringkas di saku tas ranselmu.',
+  },
+  {
+    key: 'digital_notes',
+    title: 'Catatan Kuliah Digital / E-Book Diktat',
+    category: 'Akademik & Tugas',
+    description: 'Mencatat materi kuliah menggunakan tablet/laptop dan membaca buku diktat berformat digital dari perpustakaan.',
+    pointsEarned: 15,
+    xpEarned: 20,
+    wastePreventedGrams: 80,
+    co2PreventedGrams: 105,
+    iconName: 'BookOpen',
+    tips: 'Perpustakaan Digital UNM menyediakan ribuan e-book dan jurnal bereputasi gratis bagi sivitas akademika.',
+  },
+];
+
+export function getUserReduceActions(userId: string): ReduceActionLog[] {
+  const sanitized = sanitizeUserId(userId);
+  const key = `${STORAGE_KEYS.REDUCE_ACTIONS_PREFIX}${sanitized}`;
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to load user reduce actions:', e);
+  }
+
+  // Initial demonstration actions
+  const initialLogs: ReduceActionLog[] = [
+    {
+      id: `red_init_1_${sanitized}`,
+      userId,
+      actionKey: 'tumbler',
+      title: 'Bawa Tumbler Pribadi',
+      pointsEarned: 10,
+      xpEarned: 15,
+      wastePreventedGrams: 25,
+      co2PreventedGrams: 80,
+      timestamp: 'Hari ini, 08:30 WITA',
+      notes: 'Refill air di Water Station Menara Pinisi Lt. 1',
+    },
+    {
+      id: `red_init_2_${sanitized}`,
+      userId,
+      actionKey: 'tote_bag',
+      title: 'Tolak Kresek / Bawa Tote Bag',
+      pointsEarned: 10,
+      xpEarned: 10,
+      wastePreventedGrams: 15,
+      co2PreventedGrams: 50,
+      timestamp: 'Kemarin, 14:15 WITA',
+      notes: 'Fotokopi modul Algoritma Pemrograman di Parangtambung',
+    },
+    {
+      id: `red_init_3_${sanitized}`,
+      userId,
+      actionKey: 'paperless',
+      title: 'Tugas Paperless & LMS SYAM-OK',
+      pointsEarned: 10,
+      xpEarned: 15,
+      wastePreventedGrams: 50,
+      co2PreventedGrams: 65,
+      timestamp: '2 hari lalu, 19:40 WITA',
+      notes: 'Pengumpulan proposal praktikum via portal SYAM-OK UNM',
+    },
+  ];
+
+  saveUserReduceActions(userId, initialLogs);
+  return initialLogs;
+}
+
+export function saveUserReduceActions(userId: string, logs: ReduceActionLog[]): void {
+  const sanitized = sanitizeUserId(userId);
+  const key = `${STORAGE_KEYS.REDUCE_ACTIONS_PREFIX}${sanitized}`;
+  try {
+    localStorage.setItem(key, JSON.stringify(logs));
+  } catch (e) {
+    console.error('Failed to save user reduce actions:', e);
+  }
+}
+
+export function logUserReduceAction(
+  userId: string,
+  actionKey: ReduceActionKey,
+  notes?: string
+): { log: ReduceActionLog; pointsEarned: number; xpEarned: number } {
+  const def = REDUCE_ACTION_DEFINITIONS.find((d) => d.key === actionKey) || REDUCE_ACTION_DEFINITIONS[0];
+  const now = new Date();
+  const timeStr = `Hari ini, ${now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })} WITA`;
+
+  const newLog: ReduceActionLog = {
+    id: `red_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    userId,
+    actionKey,
+    title: def.title,
+    pointsEarned: def.pointsEarned,
+    xpEarned: def.xpEarned,
+    wastePreventedGrams: def.wastePreventedGrams,
+    co2PreventedGrams: def.co2PreventedGrams,
+    timestamp: timeStr,
+    notes: notes || def.tips,
+  };
+
+  const existing = getUserReduceActions(userId);
+  const updated = [newLog, ...existing];
+  saveUserReduceActions(userId, updated);
+
+  // Automatically credit points and XP to user profile
+  try {
+    const profile = getUserProfile(userId);
+    profile.ecoPoints = (profile.ecoPoints || 0) + def.pointsEarned;
+    profile.xp = (profile.xp || 0) + def.xpEarned;
+    // Check level progression (e.g. 100 XP per level)
+    profile.level = Math.floor(profile.xp / 100) + 1;
+    saveUserProfile(userId, profile);
+  } catch (e) {
+    console.error('Failed to update user profile points for reduce action:', e);
+  }
+
+  return {
+    log: newLog,
+    pointsEarned: def.pointsEarned,
+    xpEarned: def.xpEarned,
+  };
+}
+
+// ==========================================
+// TRANSACTIONS PERSISTENCE ENGINE
+// ==========================================
+
+export function getStoredTransactions(): LedgerTransaction[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.TRANSACTIONS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    console.error('Failed to load stored transactions:', e);
+  }
+  // Fallback to initial seed transactions and save them
+  saveStoredTransactions(INITIAL_LEDGER_TRANSACTIONS);
+  return INITIAL_LEDGER_TRANSACTIONS;
+}
+
+export function saveStoredTransactions(txs: LedgerTransaction[]): void {
+  try {
+    localStorage.setItem(STORAGE_KEYS.TRANSACTIONS, JSON.stringify(txs));
+  } catch (e) {
+    console.error('Failed to save stored transactions:', e);
+  }
+}
+
+// ==========================================
+// 3R COMPREHENSIVE METRICS SUMMARY
+// ==========================================
+
+export function getR3MetricsSummary(userId?: string): R3MetricsSummary {
+  // 1. REDUCE METRICS
+  let totalWastePreventedGrams = 245000; // Baseline campus 245 kg
+  let totalReduceActionsCount = 3840; // Campus baseline actions
+  let estimatedSingleUseBottlesSaved = 5820;
+
+  if (userId) {
+    const userActions = getUserReduceActions(userId);
+    const userPreventedGrams = userActions.reduce((acc, a) => acc + (a.wastePreventedGrams || 0), 0);
+    totalWastePreventedGrams += userPreventedGrams;
+    totalReduceActionsCount += userActions.length;
+    const userBottles = userActions.filter((a) => a.actionKey === 'tumbler').length;
+    estimatedSingleUseBottlesSaved += userBottles;
+  }
+
+  // 2. REUSE METRICS
+  const reuseItems = getStoredReuseItems();
+  const claimedCount = reuseItems.filter((i) => i.status === 'claimed').length;
+  const totalItemsReusedCount = 428 + claimedCount;
+  const totalReuseTransactionsRupiah = 14850000;
+
+  // 3. RECYCLE METRICS
+  const txs = getStoredTransactions();
+  const verifiedTxs = txs.filter((t) => t.status === 'verified');
+  const totalWasteRecycledKg = Math.round(
+    1820 + verifiedTxs.reduce((acc, t) => acc + (t.totalWeightKg || 0), 0)
+  );
+  const totalRecyclePointsEarned = 24600 + verifiedTxs.reduce((acc, t) => acc + (t.totalPoints || 0), 0);
+
+  // 4. TOTAL CO2 SAVINGS (From Reduce + Recycle)
+  const co2FromRecycleKg = totalWasteRecycledKg * 2.8;
+  const co2FromReduceKg = totalWastePreventedGrams / 1000 * 2.5;
+  const totalCo2SavedKg = Math.round(co2FromRecycleKg + co2FromReduceKg);
+
+  return {
+    totalWastePreventedGrams,
+    totalReduceActionsCount,
+    estimatedSingleUseBottlesSaved,
+    totalItemsReusedCount,
+    totalReuseTransactionsRupiah,
+    totalWasteRecycledKg,
+    totalRecyclePointsEarned,
+    totalCo2SavedKg,
+  };
 }

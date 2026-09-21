@@ -3,7 +3,6 @@ import {
   UserProfile,
   GISFacility,
   VRPStop,
-  RewardItem,
   LeaderboardUser,
   FacultyLeaderboard,
   LedgerTransaction,
@@ -386,59 +385,6 @@ export const VRP_STOPS: VRPStop[] = [
   { id: 's5', name: 'Drop Point FT UNM Parangtambung', sequence: 4, wasteAccumulationKg: 180, lat: -5.1843, lng: 119.4290, x: 78, y: 40, status: 'pending' },
   { id: 's6', name: 'Asrama & Kos Mahasiswa Mallengkeri', sequence: 5, wasteAccumulationKg: 220, lat: -5.1830, lng: 119.4280, x: 65, y: 18, status: 'pending' },
   { id: 's7', name: 'Pusat Kompos & Biokonversi Maggot TPST UNM', sequence: 6, wasteAccumulationKg: 0, lat: -5.1848, lng: 119.4285, x: 25, y: 30, status: 'pending' },
-];
-
-export const REWARD_ITEMS: RewardItem[] = [
-  {
-    id: 'rew_kantin_15',
-    title: 'Voucher Makan Kantin Sehat Rp 15.000',
-    category: 'Kantin',
-    description: 'Dapat digunakan di seluruh tenant food court kantin ramah lingkungan kampus.',
-    costPoints: 180,
-    partner: 'Paguyuban Kantin Hijau Kampus',
-    stock: 45,
-    icon: 'Coffee',
-  },
-  {
-    id: 'rew_data_10gb',
-    title: 'Paket Kuota Belajar Telkomsel 10 GB',
-    category: 'Pulsa/Data',
-    description: 'Akses cepat jaringan edukasi, jurnal ilmiah, dan kuliah daring selama 30 hari.',
-    costPoints: 320,
-    partner: 'Telkomsel Edu Campus',
-    stock: 28,
-    icon: 'Wifi',
-  },
-  {
-    id: 'rew_print_50',
-    title: 'Gratis Print & Jilid Skripsi 50 Halaman',
-    category: 'Akademik',
-    description: 'Voucher cetak dokumen akademik di percetakan universitas menggunakan kertas daur ulang.',
-    costPoints: 220,
-    partner: 'Percetakan & Penerbitan Kampus',
-    stock: 60,
-    icon: 'FileText',
-  },
-  {
-    id: 'rew_skp_pkm',
-    title: 'Sertifikat Rekognisi Poin SKP / PKM (2 Poin)',
-    category: 'Akademik',
-    description: 'Dikonversi resmi ke Satuan Kredit Partisipasi (SKP) or portofolio pengabdian lingkungan PKM Kemendikbudristek.',
-    costPoints: 450,
-    partner: 'Bidang Kemahasiswaan & Alumni',
-    stock: 999,
-    icon: 'GraduationCap',
-  },
-  {
-    id: 'rew_tumbler',
-    title: 'Tumbler Stainless Steel Termos 500ml',
-    category: 'Voucher',
-    description: 'Mengeliminasi ribuan botol sekali pakai dengan tumbler edisi khusus Green Campus.',
-    costPoints: 400,
-    partner: 'Koperasi Mahasiswa (KOPMA)',
-    stock: 14,
-    icon: 'Sparkles',
-  },
 ];
 
 export const INITIAL_LEADERBOARD_STUDENTS: LeaderboardUser[] = [

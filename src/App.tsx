@@ -1,18 +1,29 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { ConsoleLayout } from './components/ConsoleLayout';
 import { ConsoleDashboardView } from './components/ConsoleDashboardView';
 import { LoginGatewayView } from './components/LoginGatewayView';
 import { DashboardView } from './components/DashboardView';
-import { EducationView } from './components/EducationView';
-import { CommunityView } from './components/CommunityView';
-import { GamificationView } from './components/GamificationView';
-import { AIScannerView } from './components/AIScannerView';
-import { LedgerAuditView } from './components/LedgerAuditView';
 import { RoleSwitchModal } from './components/RoleSwitchModal';
 import { PickupRequestModal } from './components/PickupRequestModal';
-import { AdminDashboardView } from './components/AdminDashboardView';
-import { StudentSurveyModal } from './components/StudentSurveyModal';
-import { RoleApplicationModal } from './components/RoleApplicationModal';
+
+// Code-splitting with lazy loading for heavy views
+const EducationView = lazy(() => import('./components/EducationView').then(m => ({ default: m.EducationView })));
+const CommunityView = lazy(() => import('./components/CommunityView').then(m => ({ default: m.CommunityView })));
+const GamificationView = lazy(() => import('./components/GamificationView').then(m => ({ default: m.GamificationView })));
+const AIScannerView = lazy(() => import('./components/AIScannerView').then(m => ({ default: m.AIScannerView })));
+const LedgerAuditView = lazy(() => import('./components/LedgerAuditView').then(m => ({ default: m.LedgerAuditView })));
+const AdminDashboardView = lazy(() => import('./components/AdminDashboardView').then(m => ({ default: m.AdminDashboardView })));
+const ReduceActionTracker = lazy(() => import('./components/ReduceActionTracker').then(m => ({ default: m.ReduceActionTracker })));
+const StudentSurveyModal = lazy(() => import('./components/StudentSurveyModal').then(m => ({ default: m.StudentSurveyModal })));
+const RoleApplicationModal = lazy(() => import('./components/RoleApplicationModal').then(m => ({ default: m.RoleApplicationModal })));
+const SystemArchitectureModal = lazy(() => import('./components/SystemArchitectureModal').then(m => ({ default: m.SystemArchitectureModal })));
+
+const ViewLoadingFallback: React.FC = () => (
+  <div className="flex flex-col items-center justify-center py-20 px-4 space-y-3">
+    <div className="w-8 h-8 border-3 border-emerald-600 border-t-transparent rounded-full animate-spin" />
+    <p className="text-xs font-semibold text-slate-500">Memuat modul EcoCampus...</p>
+  </div>
+);
 import {
   getStoredSurveys,
   getUserAnsweredSurveyIds,
@@ -22,7 +33,6 @@ import { AuthModal } from './components/AuthModal';
 import { UserInboxModal } from './components/UserInboxModal';
 import { PublicProfileModal } from './components/PublicProfileModal';
 import { OnboardingModal } from './components/OnboardingModal';
-import { SystemArchitectureModal } from './components/SystemArchitectureModal';
 import { PrivacyPolicyModal } from './components/PrivacyPolicyModal';
 import {
   INITIAL_USER,
@@ -35,7 +45,6 @@ import {
   UserProfile,
   LedgerTransaction,
   WasteCategoryType,
-  RewardItem,
   PickupRequest,
   ChatThread,
   ChatMessage,
@@ -46,6 +55,8 @@ import {
   getStoredUserChatThreads,
   saveStoredUserChatThreads,
   deliverMessageToRecipient,
+  getStoredTransactions,
+  saveStoredTransactions,
 } from './utils/storage';
 import { Leaf, ShieldCheck, CheckCircle2, MessageSquare, LogIn, Sparkles, Layers, Cookie, HelpCircle, BarChart3, LayoutGrid } from 'lucide-react';
 import { useAuth } from './context/AuthContext';
@@ -101,7 +112,7 @@ export default function App() {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
-  const [transactions, setTransactions] = useState<LedgerTransaction[]>(INITIAL_LEDGER_TRANSACTIONS);
+  const [transactions, setTransactions] = useState<LedgerTransaction[]>(() => getStoredTransactions());
   const [susScore, setSusScore] = useState<number>(88.5);
   const [pickupRequests, setPickupRequests] = useState<PickupRequest[]>([]);
 
@@ -222,24 +233,6 @@ export default function App() {
   const handlePickupRequest = (req: PickupRequest) => {
     setPickupRequests((prev) => [req, ...prev]);
     showAppToast('Permintaan penjemputan terkirim ke petugas!');
-  };
-
-  // Redeem Reward from Gamification Store
-  const handleRedeemReward = (reward: RewardItem): boolean => {
-    if (!isLoggedIn) {
-      setAuthModalMode('login');
-      setIsAuthModalOpen(true);
-      showAppToast('Silakan masuk akun kampus untuk menukarkan hadiah');
-      return false;
-    }
-    if (currentUser.ecoPoints < reward.costPoints) return false;
-
-    setCurrentUser((prev) => ({
-      ...prev,
-      ecoPoints: prev.ecoPoints - reward.costPoints,
-    }));
-    showAppToast(`Berhasil menukarkan voucher ${reward.title}!`);
-    return true;
   };
 
   // Send Message in Inter-User Chat (Strictly isolated per user, no auto-replies, no unwanted redirects)
@@ -439,6 +432,75 @@ export default function App() {
     setIsPublicProfileModalOpen(true);
   };
 
+  const handleVerifyTransaction = (txId: string) => {
+    let verifiedTx: LedgerTransaction | undefined;
+    const updated = transactions.map((t) => {
+      if (t.id === txId) {
+        verifiedTx = { ...t, status: 'verified' as const, verifiedBy: currentUser?.name + ' (Petugas TPST)' };
+        return verifiedTx;
+      }
+      return t;
+    });
+    setTransactions(updated);
+    saveStoredTransactions(updated);
+
+    if (verifiedTx && currentUser) {
+      if (
+        verifiedTx.userId === currentUser.id ||
+        verifiedTx.userName.toLowerCase() === currentUser.name.toLowerCase()
+      ) {
+        const addedPoints = verifiedTx.totalPoints || 0;
+        const addedWeight = verifiedTx.totalWeightKg || 0;
+        setCurrentUser({
+          ...currentUser,
+          ecoPoints: (currentUser.ecoPoints || 0) + addedPoints,
+          xp: (currentUser.xp || 0) + addedPoints * 2,
+          totalWeightDepositedKg: Number(
+            ((currentUser.totalWeightDepositedKg || 0) + addedWeight).toFixed(1)
+          ),
+        });
+      }
+    }
+    showAppToast('Setoran berhasil diverifikasi dan poin dikreditkan!');
+  };
+
+  const handleRejectTransaction = (txId: string) => {
+    const updated = transactions.map((t) =>
+      t.id === txId ? { ...t, status: 'flagged' as const } : t
+    );
+    setTransactions(updated);
+    saveStoredTransactions(updated);
+    showAppToast('Transaksi ditandai perlu perbaikan audit.');
+  };
+
+  const handleRecordDeposit = (newTx: LedgerTransaction) => {
+    const updated = [newTx, ...transactions];
+    setTransactions(updated);
+    saveStoredTransactions(updated);
+
+    if (newTx.status === 'verified') {
+      if (
+        currentUser &&
+        (newTx.userId === currentUser.id ||
+          newTx.userName.toLowerCase() === currentUser.name.toLowerCase())
+      ) {
+        const addedPoints = newTx.totalPoints || 0;
+        const addedWeight = newTx.totalWeightKg || 0;
+        setCurrentUser({
+          ...currentUser,
+          ecoPoints: (currentUser.ecoPoints || 0) + addedPoints,
+          xp: (currentUser.xp || 0) + addedPoints * 2,
+          totalWeightDepositedKg: Number(
+            ((currentUser.totalWeightDepositedKg || 0) + addedWeight).toFixed(1)
+          ),
+        });
+      }
+      showAppToast(`Setoran ${newTx.totalWeightKg} kg berhasil dicatat & ${newTx.totalPoints} pts dikreditkan!`);
+    } else {
+      showAppToast(`Setoran ${newTx.totalWeightKg} kg dicatat & ditandai untuk verifikasi anomali.`);
+    }
+  };
+
   return (
     <div className="min-h-screen flex flex-col font-sans transition-colors duration-200">
       {/* Toast Notification */}
@@ -549,6 +611,10 @@ export default function App() {
                 transactions={transactions}
                 onNavigate={setActiveTab}
                 onOpenChatWithSeller={handleOpenChatWithSeller}
+                onUpdateUser={(updated) => {
+                  setCurrentUser(updated);
+                  showAppToast('Poin dan aksi reduce berhasil diperbarui!');
+                }}
               />
             ) : (
               <DashboardView
@@ -565,84 +631,91 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'komunitas' && (
-          <ErrorBoundary
-            fallbackTitle="Bursa & Papan Dicari Mengalami Kendala Sementara"
-            fallbackMessage="Terjadi kendala saat memuat modul bursa reuse dan papan dicari. Anda dapat menekan tombol coba pulihkan di bawah."
-          >
-            <CommunityView
+        {/* Lazy Loaded Module Tabs */}
+        <Suspense fallback={<ViewLoadingFallback />}>
+          {activeTab === 'reduce' && (
+            <ErrorBoundary
+              fallbackTitle="Pusat Aksi Reduce Mengalami Kendala Sementara"
+              fallbackMessage="Terjadi kendala saat memuat pelacak aksi reduce bebas sampah. Anda dapat mencoba memuat ulang di bawah."
+            >
+              <ReduceActionTracker
+                currentUser={currentUser}
+                onUpdateUser={(updated) => {
+                  setCurrentUser(updated);
+                  showAppToast('Poin dan XP aksi reduce berhasil diperbarui!');
+                }}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeTab === 'komunitas' && (
+            <ErrorBoundary
+              fallbackTitle="Bursa & Papan Dicari Mengalami Kendala Sementara"
+              fallbackMessage="Terjadi kendala saat memuat modul bursa reuse dan papan dicari. Anda dapat menekan tombol coba pulihkan di bawah."
+            >
+              <CommunityView
+                currentUser={currentUser}
+                onOpenChatWithSeller={handleOpenChatWithSeller}
+                onOpenUserProfile={handleOpenUserProfile}
+              />
+            </ErrorBoundary>
+          )}
+
+          {activeTab === 'scanner' && (
+            <AIScannerView
               currentUser={currentUser}
-              onRedeemReward={handleRedeemReward}
-              onOpenChatWithSeller={handleOpenChatWithSeller}
-              onOpenUserProfile={handleOpenUserProfile}
+              onNavigateToEducation={() => setActiveTab('edukasi')}
+              onNavigateToCommunity={() => setActiveTab('komunitas')}
+              onCancel={() => setActiveTab('dashboard')}
             />
-          </ErrorBoundary>
-        )}
+          )}
 
-        {activeTab === 'scanner' && (
-          <AIScannerView
-            currentUser={currentUser}
-            onNavigateToEducation={() => setActiveTab('edukasi')}
-            onNavigateToCommunity={() => setActiveTab('komunitas')}
-            onCancel={() => setActiveTab('dashboard')}
-          />
-        )}
-
-        {activeTab === 'edukasi' && (
-          <EducationView
-            onOpenScanner={() => setActiveTab('scanner')}
-            onNavigateToScanner={() => setActiveTab('scanner')}
-            onNavigateToMarketplace={() => setActiveTab('komunitas')}
-          />
-        )}
-
-        {activeTab === 'gamification' && (
-          <GamificationView
-            currentUser={currentUser}
-            onRedeemReward={handleRedeemReward}
-            onUpdateUser={(updated) => {
-              setCurrentUser(updated);
-              showAppToast('Poin dan profil Anda berhasil diperbarui!');
-            }}
-          />
-        )}
-
-        {activeTab === 'admin' && (
-          <ProtectedRoute
-            requiredRoles={['admin_kampus', 'admin']}
-            onUnauthorizedRedirect={() => setActiveTab('dashboard')}
-          >
-            <AdminDashboardView
-              currentUser={currentUser}
-              onNavigateToTab={setActiveTab}
-              onShowToast={showAppToast}
+          {activeTab === 'edukasi' && (
+            <EducationView
+              onOpenScanner={() => setActiveTab('scanner')}
+              onNavigateToScanner={() => setActiveTab('scanner')}
+              onNavigateToMarketplace={() => setActiveTab('komunitas')}
             />
-          </ProtectedRoute>
-        )}
+          )}
 
-        {activeTab === 'ledger' && (
-          <ProtectedRoute
-            requiredRoles={['petugas_tps', 'admin_kampus', 'admin']}
-            onUnauthorizedRedirect={() => setActiveTab('dashboard')}
-          >
-            <LedgerAuditView
+          {activeTab === 'gamification' && (
+            <GamificationView
               currentUser={currentUser}
-              transactions={transactions}
-              onVerifyTransaction={(id) => {
-                setTransactions((prev) =>
-                  prev.map((t) => (t.id === id ? { ...t, status: 'verified' } : t))
-                );
-                showAppToast('Aksi berhasil diverifikasi dan poin dikreditkan!');
-              }}
-              onRejectTransaction={(id) => {
-                setTransactions((prev) =>
-                  prev.map((t) => (t.id === id ? { ...t, status: 'flagged' } : t))
-                );
-                showAppToast('Transaksi ditandai perlu perbaikan audit.');
+              onUpdateUser={(updated) => {
+                setCurrentUser(updated);
+                showAppToast('Poin dan profil Anda berhasil diperbarui!');
               }}
             />
-          </ProtectedRoute>
-        )}
+          )}
+
+          {activeTab === 'admin' && (
+            <ProtectedRoute
+              requiredRoles={['admin_kampus', 'admin']}
+              onUnauthorizedRedirect={() => setActiveTab('dashboard')}
+            >
+              <AdminDashboardView
+                currentUser={currentUser}
+                onNavigateToTab={setActiveTab}
+                onShowToast={showAppToast}
+              />
+            </ProtectedRoute>
+          )}
+
+          {activeTab === 'ledger' && (
+            <ProtectedRoute
+              requiredRoles={['petugas_tps', 'admin_kampus', 'admin']}
+              onUnauthorizedRedirect={() => setActiveTab('dashboard')}
+            >
+              <LedgerAuditView
+                currentUser={currentUser}
+                transactions={transactions}
+                onVerifyTransaction={handleVerifyTransaction}
+                onRejectTransaction={handleRejectTransaction}
+                onRecordDeposit={handleRecordDeposit}
+              />
+            </ProtectedRoute>
+          )}
+        </Suspense>
       </ConsoleLayout>
       )}
 
@@ -689,101 +762,103 @@ export default function App() {
       )}
 
       {/* Modals */}
-      <OnboardingModal
-        isOpen={isOnboardingOpen}
-        onClose={() => setIsOnboardingOpen(false)}
-        onNavigateToTab={(tab) => setActiveTab(tab)}
-      />
+      <Suspense fallback={null}>
+        <OnboardingModal
+          isOpen={isOnboardingOpen}
+          onClose={() => setIsOnboardingOpen(false)}
+          onNavigateToTab={(tab) => setActiveTab(tab)}
+        />
 
-      <SystemArchitectureModal
-        isOpen={isArchitectureOpen}
-        onClose={() => setIsArchitectureOpen(false)}
-      />
+        <SystemArchitectureModal
+          isOpen={isArchitectureOpen}
+          onClose={() => setIsArchitectureOpen(false)}
+        />
 
-      <PrivacyPolicyModal
-        isOpen={isPrivacyModalOpen}
-        onClose={() => setIsPrivacyModalOpen(false)}
-      />
+        <PrivacyPolicyModal
+          isOpen={isPrivacyModalOpen}
+          onClose={() => setIsPrivacyModalOpen(false)}
+        />
 
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        onLogin={handleLogin}
-        currentUser={currentUser}
-        initialMode={authModalMode}
-      />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          onLogin={handleLogin}
+          currentUser={currentUser}
+          initialMode={authModalMode}
+        />
 
-      <UserInboxModal
-        isOpen={isInboxModalOpen}
-        onClose={() => {
-          setIsInboxModalOpen(false);
-          setActiveChatThreadId(null);
-        }}
-        currentUser={currentUser}
-        initialThreadId={activeChatThreadId}
-        onOpenUserProfile={handleOpenUserProfile}
-        threads={chatThreads}
-        onSendMessage={handleSendMessage}
-        onSelectThread={(threadId) => setActiveChatThreadId(threadId)}
-      />
+        <UserInboxModal
+          isOpen={isInboxModalOpen}
+          onClose={() => {
+            setIsInboxModalOpen(false);
+            setActiveChatThreadId(null);
+          }}
+          currentUser={currentUser}
+          initialThreadId={activeChatThreadId}
+          onOpenUserProfile={handleOpenUserProfile}
+          threads={chatThreads}
+          onSendMessage={handleSendMessage}
+          onSelectThread={(threadId) => setActiveChatThreadId(threadId)}
+        />
 
-      <PublicProfileModal
-        isOpen={isPublicProfileModalOpen}
-        onClose={() => setIsPublicProfileModalOpen(false)}
-        user={selectedPublicUser}
-        onOpenChatWithUser={(user) => handleOpenChatWithSeller(user.name)}
-      />
+        <PublicProfileModal
+          isOpen={isPublicProfileModalOpen}
+          onClose={() => setIsPublicProfileModalOpen(false)}
+          user={selectedPublicUser}
+          onOpenChatWithUser={(user) => handleOpenChatWithSeller(user.name)}
+        />
 
-      <StudentSurveyModal
-        isOpen={isStudentSurveyModalOpen}
-        onClose={() => {
-          setIsStudentSurveyModalOpen(false);
-          setSurveys(getStoredSurveys());
-          if (currentUser?.id) {
-            setAnsweredSurveyIds(getUserAnsweredSurveyIds(currentUser.id));
-          }
-        }}
-        currentUser={currentUser}
-        activeSurveys={surveys}
-        answeredSurveyIds={answeredSurveyIds}
-        onSurveyCompleted={(surveyId) => {
-          setCurrentUser((prev) => ({
-            ...prev,
-            ecoPoints: prev.ecoPoints + 25,
-          }));
-          setSurveys(getStoredSurveys());
-          if (currentUser?.id) {
-            setAnsweredSurveyIds(getUserAnsweredSurveyIds(currentUser.id));
-          }
-          showAppToast('Terima kasih! Jawaban survei Anda berhasil disimpan (+25 Eco-Points).');
-        }}
-      />
+        <StudentSurveyModal
+          isOpen={isStudentSurveyModalOpen}
+          onClose={() => {
+            setIsStudentSurveyModalOpen(false);
+            setSurveys(getStoredSurveys());
+            if (currentUser?.id) {
+              setAnsweredSurveyIds(getUserAnsweredSurveyIds(currentUser.id));
+            }
+          }}
+          currentUser={currentUser}
+          activeSurveys={surveys}
+          answeredSurveyIds={answeredSurveyIds}
+          onSurveyCompleted={(surveyId) => {
+            setCurrentUser((prev) => ({
+              ...prev,
+              ecoPoints: prev.ecoPoints + 25,
+            }));
+            setSurveys(getStoredSurveys());
+            if (currentUser?.id) {
+              setAnsweredSurveyIds(getUserAnsweredSurveyIds(currentUser.id));
+            }
+            showAppToast('Terima kasih! Jawaban survei Anda berhasil disimpan (+25 Eco-Points).');
+          }}
+        />
 
-      <RoleApplicationModal
-        isOpen={isRoleApplicationModalOpen}
-        onClose={() => setIsRoleApplicationModalOpen(false)}
-        currentUser={currentUser}
-        onSubmitSuccess={() => {
-          showAppToast('Pengajuan perubahan peran Anda telah dikirim dan menunggu verifikasi Admin.');
-        }}
-      />
+        <RoleApplicationModal
+          isOpen={isRoleApplicationModalOpen}
+          onClose={() => setIsRoleApplicationModalOpen(false)}
+          currentUser={currentUser}
+          onSubmitSuccess={() => {
+            showAppToast('Pengajuan perubahan peran Anda telah dikirim dan menunggu verifikasi Admin.');
+          }}
+        />
 
-      <RoleSwitchModal
-        isOpen={isRoleModalOpen}
-        onClose={() => setIsRoleModalOpen(false)}
-        currentUser={currentUser}
-        onSelectUser={(user) => {
-          handleLogin(user);
-          showAppToast(`Beralih ke akun ${user.name} (${user.role})`);
-        }}
-      />
+        <RoleSwitchModal
+          isOpen={isRoleModalOpen}
+          onClose={() => setIsRoleModalOpen(false)}
+          currentUser={currentUser}
+          onSelectUser={(user) => {
+            handleLogin(user);
+            showAppToast(`Beralih ke akun ${user.name} (${user.role})`);
+          }}
+        />
 
-      <PickupRequestModal
-        isOpen={isPickupModalOpen}
-        onClose={() => setIsPickupModalOpen(false)}
-        currentUser={currentUser}
-        onSubmitRequest={handlePickupRequest}
-      />
+        <PickupRequestModal
+          isOpen={isPickupModalOpen}
+          onClose={() => setIsPickupModalOpen(false)}
+          currentUser={currentUser}
+          onSubmitRequest={handlePickupRequest}
+        />
+      </Suspense>
     </div>
   );
 }
